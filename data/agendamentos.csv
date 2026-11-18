@@ -1,0 +1,2 @@
+id,professor,disciplina,sala,tipo_aula,alunos,data,inicio,fim,status,justificativa,criado_por
+1,Ana Souza,Programação Web,Lab Informática 201,Laboratório de Informática,32,2026-09-19,14:00,16:00,Confirmada,Reserva compatível,ana@atila.local
