@@ -6,19 +6,20 @@ db = inicializar_firebase()
 COLLECTION_NAME = "reservas"
 
 def listar():
-    # Busca todas as reservas do Firebase Firestore e converte para DataFrame
-    docs = db.collection(COLLECTION_NAME).stream()
-    dados = []
-    for doc in docs:
-        d = doc.to_dict()
-        d["id"] = doc.id  # Garante que o ID do documento é o identificador
-        dados.append(d)
-    
-    if not dados:
-        # Retorna um DataFrame vazio com as colunas esperadas se não houver registros
+    try:
+        docs = list(db.collection(COLLECTION_NAME).stream())
+        dados = []
+        for doc in docs:
+            d = doc.to_dict()
+            d["id"] = doc.id
+            dados.append(d)
+        
+        if not dados:
+            return pd.DataFrame(columns=["id", "professor", "disciplina", "sala", "tipo_aula", "alunos", "data", "inicio", "fim", "status", "justificativa", "criado_por"])
+        
+        return pd.DataFrame(dados)
+    except Exception:
         return pd.DataFrame(columns=["id", "professor", "disciplina", "sala", "tipo_aula", "alunos", "data", "inicio", "fim", "status", "justificativa", "criado_por"])
-    
-    return pd.DataFrame(dados)
 
 def conflitos(sala, data, inicio, fim, ignorar_id=None):
     df = listar()
@@ -36,7 +37,12 @@ def conflitos(sala, data, inicio, fim, ignorar_id=None):
     mask = []
     for _, r in df.iterrows():
         r_ini = datetime.strptime(str(r["inicio"]), "%H:%M").time()
-        r_end = datetime.strptime(str(r["fim"]), "%H:%M").time()
+        r_end = datetime.strptime(str(r["end"] if "end" in r else r["fim"]), "%H:%M").time() if "end" in r or "fim" in r else datetime.strptime("16:00", "%H:%M").time()
+        # Tratamento seguro para horários
+        try:
+            r_end = datetime.strptime(str(r["fim"]), "%H:%M").time()
+        except:
+            pass
         mask.append(ini < r_end and end > r_ini)
     return df[mask]
 
@@ -44,13 +50,11 @@ def horario_disponivel(sala, data, inicio, fim):
     return conflitos(sala, data, inicio, fim).empty
 
 def criar(dados):
-    # Grava diretamente no Firebase Firestore
     doc_ref = db.collection(COLLECTION_NAME).document()
     doc_ref.set(dados)
     return doc_ref.id
 
 def alterar_status(id_reserva, status):
-    # Atualiza o status diretamente no documento do Firebase
     doc_ref = db.collection(COLLECTION_NAME).document(str(id_reserva))
     doc_ref.update({"status": status})
 
