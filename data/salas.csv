@@ -1,5 +1,0 @@
-id,sala,capacidade,tipo,campus,predio,andar,numero,computadores,projetor,ar_condicionado,acessibilidade,observacoes
-1,Sala 101,40,Teórica,Central,A,1,101,0,Sim,Sim,Sim,Sala padrão
-2,Lab Informática 201,35,Laboratório de Informática,Central,B,2,201,35,Sim,Sim,Sim,Computadores em rede
-3,Auditório Principal,150,Auditório,Central,C,1,A01,0,Sim,Sim,Sim,Projetor e sistema de som
-4,Sala Prática 102,30,Prática,Central,A,1,102,0,Não,Sim,Não,
