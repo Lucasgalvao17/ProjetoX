@@ -1,10 +1,24 @@
-from models.csv_repository import ler_csv, adicionar_linha, atualizar_csv
+from utils.firebase_utils import inicializar_firebase
 from datetime import datetime
+import pandas as pd
 
-COLS = ["id","professor","disciplina","sala","tipo_aula","alunos","data","inicio","fim","status","justificativa","criado_por"]
+db = inicializar_firebase()
+COLLECTION_NAME = "reservas"
 
 def listar():
-    return ler_csv("agendamentos.csv", COLS)
+    # Busca todas as reservas do Firebase Firestore e converte para DataFrame
+    docs = db.collection(COLLECTION_NAME).stream()
+    dados = []
+    for doc in docs:
+        d = doc.to_dict()
+        d["id"] = doc.id  # Garante que o ID do documento é o identificador
+        dados.append(d)
+    
+    if not dados:
+        # Retorna um DataFrame vazio com as colunas esperadas se não houver registros
+        return pd.DataFrame(columns=["id", "professor", "disciplina", "sala", "tipo_aula", "alunos", "data", "inicio", "fim", "status", "justificativa", "criado_por"])
+    
+    return pd.DataFrame(dados)
 
 def conflitos(sala, data, inicio, fim, ignorar_id=None):
     df = listar()
@@ -30,15 +44,15 @@ def horario_disponivel(sala, data, inicio, fim):
     return conflitos(sala, data, inicio, fim).empty
 
 def criar(dados):
-    df = listar()
-    novo_id = 1 if df.empty else int(pd_to_num(df["id"]).max()) + 1
-    adicionar_linha("agendamentos.csv", {"id": novo_id, **dados}, COLS)
+    # Grava diretamente no Firebase Firestore
+    doc_ref = db.collection(COLLECTION_NAME).document()
+    doc_ref.set(dados)
+    return doc_ref.id
 
 def alterar_status(id_reserva, status):
-    df = listar()
-    df.loc[df["id"].astype(str) == str(id_reserva), "status"] = status
-    atualizar_csv("agendamentos.csv", df)
+    # Atualiza o status diretamente no documento do Firebase
+    doc_ref = db.collection(COLLECTION_NAME).document(str(id_reserva))
+    doc_ref.update({"status": status})
 
 def pd_to_num(s):
-    import pandas as pd
     return pd.to_numeric(s, errors="coerce").fillna(0)
