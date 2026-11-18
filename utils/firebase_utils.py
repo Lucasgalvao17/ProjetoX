@@ -12,7 +12,7 @@ def inicializar_firebase():
                 cred = credentials.Certificate(caminho_json)
                 firebase_admin.initialize_app(cred)
             else:
-                st.error("Erro crítico: O arquivo serviceAccountKey.json não foi encontrado na pasta utils!")
+                st.error(f"Erro crítico: O arquivo não foi encontrado em {caminho_json}!")
                 raise FileNotFoundError("Arquivo de credenciais do Firebase não encontrado.")
                 
         except Exception as e:
