@@ -61,9 +61,8 @@ with st.form("reserva"):
 
         # Laboratório exige quantidade suficiente de computadores.
         if tipo == "Laboratório de Informática" and not candidatos.empty:
-            candidatos = candidatos[pd_num(candidatos["computadores"]) >= alunos]
+            candidatos = candidatos[pd_num(salas["computadores"]) >= alunos]
 
-        # Auditório deve ter capacidade para a turma; já tratado acima.
         if candidatos.empty:
             st.error("Nenhuma sala atende aos requisitos informados.")
             sala = st.selectbox("Sala disponível", salas["sala"].astype(str).tolist())
