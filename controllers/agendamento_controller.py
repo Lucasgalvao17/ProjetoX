@@ -23,31 +23,41 @@ def listar():
 
 def conflitos(sala, data, inicio, fim, ignorar_id=None):
     df = listar()
-    if df.empty:
-        return df
-    df = df[(df["sala"].astype(str) == str(sala)) &
-            (df["data"].astype(str) == str(data)) &
-            (df["status"].isin(["Pendente","Confirmada"]))]
-    if ignorar_id is not None:
+    if df.empty or "sala" not in df.columns:
+        return pd.DataFrame()
+    
+    # Filtro seguro por sala, data e status ativo
+    df = df[
+        (df["sala"].astype(str) == str(sala)) &
+        (df["data"].astype(str) == str(data)) &
+        (df["status"].isin(["Pendente", "Confirmada"]))
+    ]
+    
+    if ignorar_id is not None and "id" in df.columns:
         df = df[df["id"].astype(str) != str(ignorar_id)]
+        
     if df.empty:
-        return df
-    ini = datetime.strptime(str(inicio), "%H:%M").time()
-    end = datetime.strptime(str(fim), "%H:%M").time()
+        return pd.DataFrame()
+    
+    ini_obj = datetime.strptime(str(inicio), "%H:%M").time()
+    fim_obj = datetime.strptime(str(fim), "%H:%M").time()
+    
     mask = []
     for _, r in df.iterrows():
-        r_ini = datetime.strptime(str(r["inicio"]), "%H:%M").time()
-        r_end = datetime.strptime(str(r["end"] if "end" in r else r["fim"]), "%H:%M").time() if "end" in r or "fim" in r else datetime.strptime("16:00", "%H:%M").time()
-        # Tratamento seguro para horários
         try:
+            r_ini = datetime.strptime(str(r["inicio"]), "%H:%M").time()
             r_end = datetime.strptime(str(r["fim"]), "%H:%M").time()
-        except:
-            pass
-        mask.append(ini < r_end and end > r_ini)
+            # Verifica sobreposição de horários
+            tem_conflito = (ini_obj < r_end) and (fim_obj > r_ini)
+            mask.append(tem_conflito)
+        except Exception:
+            mask.append(False)
+            
     return df[mask]
 
 def horario_disponivel(sala, data, inicio, fim):
-    return conflitos(sala, data, inicio, fim).empty
+    conflitantes = conflitos(sala, data, inicio, fim)
+    return conflitantes.empty
 
 def criar(dados):
     doc_ref = db.collection(COLLECTION_NAME).document()
