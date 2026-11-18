@@ -5,23 +5,23 @@ from firebase_admin import credentials, firestore
 def inicializar_firebase():
     if not firebase_admin._apps:
         try:
-            # Pega os segredos do Streamlit
             fb_secrets = st.secrets["firebase"]
+            cred_dict = dict(fb_secrets)
             
-            # Monta o dicionário de credenciais explicitamente
-            cred_dict = {
-                "type": fb_secrets["type"],
-                "project_id": fb_secrets["project_id"],
-                "private_key_id": fb_secrets["private_key_id"],
-                "private_key": fb_secrets["private_key"].strip(),
-                "client_email": fb_secrets["client_email"],
-                "client_id": fb_secrets["client_id"],
-                "auth_uri": fb_secrets["auth_uri"],
-                "token_uri": fb_secrets["token_uri"],
-                "auth_provider_x509_cert_url": fb_secrets["auth_provider_x509_cert_url"],
-                "client_x509_cert_url": fb_secrets["client_x509_cert_url"],
-                "universe_domain": fb_secrets.get("universe_domain", "googleapis.com")
-            }
+            # Pega a chave privada e limpa qualquer sujeira ou caractere inválido no início
+            pk = str(cred_dict.get("private_key", ""))
+            pk = pk.strip()
+            
+            # Remove eventuais barras invertidas duplicadas ou quebras iniciais indesejadas
+            if pk.startswith("\\n"):
+                pk = pk[2:]
+            elif pk.startswith("\n"):
+                pk = pk[1:]
+                
+            # Converte os caracteres literais '\n' em quebras de linha reais do sistema
+            pk = pk.replace("\\n", "\n")
+            
+            cred_dict["private_key"] = pk
             
             cred = credentials.Certificate(cred_dict)
             firebase_admin.initialize_app(cred)
