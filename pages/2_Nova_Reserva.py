@@ -56,12 +56,10 @@ with st.form("reserva"):
     if salas.empty:
         st.warning("Cadastre salas antes de fazer uma reserva.")
     else:
-        # Primeiro filtra pela capacidade.
         candidatos = salas[pd_num(salas["capacidade"]) >= alunos].copy()
 
-        # Laboratório exige quantidade suficiente de computadores.
-        if tipo == "Laboratório de Informática" and not candidatos.empty:
-            candidatos = candidatos[pd_num(salas["computadores"]) >= alunos]
+        if tipo == "Laboratório de Informática" and not candidatos.empty and "computadores" in candidatos.columns:
+            candidatos = candidatos[pd_num(candidatos["computadores"]) >= alunos]
 
         if candidatos.empty:
             st.error("Nenhuma sala atende aos requisitos informados.")
@@ -112,17 +110,20 @@ if enviar:
     ):
         st.error("Já existe uma reserva pendente ou confirmada nesse horário para esta sala.")
     else:
-        criar({
-            "professor": professor.strip(),
-            "disciplina": disciplina.strip(),
-            "sala": sala,
-            "tipo_aula": tipo,
-            "alunos": alunos,
-            "data": str(data),
-            "inicio": inicio.strftime("%H:%M"),
-            "fim": fim.strftime("%H:%M"),
-            "status": "Pendente",
-            "justificativa": justificativa.strip(),
-            "criado_por": usuario_atual()["email"]
-        })
-        st.success("Reserva enviada para análise com sucesso.")
+        try:
+            criar({
+                "professor": professor.strip(),
+                "disciplina": disciplina.strip(),
+                "sala": sala,
+                "tipo_aula": tipo,
+                "alunos": int(alunos),
+                "data": str(data),
+                "inicio": inicio.strftime("%H:%M"),
+                "fim": fim.strftime("%H:%M"),
+                "status": "Pendente",
+                "justificativa": justificativa.strip(),
+                "criado_por": usuario_atual()["email"]
+            })
+            st.success("Reserva enviada para análise com sucesso.")
+        except Exception as e:
+            st.error(f"Falha ao salvar no Firestore: {e}")
