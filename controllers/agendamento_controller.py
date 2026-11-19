@@ -1,14 +1,72 @@
+import json
 import streamlit as st
-from utils.firebase_utils import inicializar_firebase
 from datetime import datetime
 import pandas as pd
+import requests
+import google.auth.transport.requests
+from google.oauth2 import service_account
 
 COLLECTION_NAME = "reservas"
+SCOPES = ["https://www.googleapis.com/auth/datastore"]
 
 
 @st.cache_resource
-def get_db():
-    return inicializar_firebase()
+def get_rest_context():
+    with open("utils/serviceAccountKey.json", "r", encoding="utf-8") as f:
+        info = json.load(f)
+
+    # Garante que \n escapado vire quebra de linha real na chave privada
+    if "private_key" in info and isinstance(info["private_key"], str):
+        info["private_key"] = info["private_key"].replace("\\n", "\n")
+
+    cred = service_account.Credentials.from_service_account_info(info, scopes=SCOPES)
+    project_id = info["project_id"]
+    base_url = f"https://firestore.googleapis.com/v1/projects/{project_id}/databases/(default)/documents"
+    return cred, base_url
+
+
+def _headers(cred):
+    if not cred.valid or cred.expired:
+        cred.refresh(google.auth.transport.requests.Request())
+    return {
+        "Authorization": f"Bearer {cred.token}",
+        "Content-Type": "application/json",
+    }
+
+
+def _to_firestore_value(v):
+    if isinstance(v, bool):
+        return {"booleanValue": v}
+    if isinstance(v, int):
+        return {"integerValue": str(v)}
+    if isinstance(v, float):
+        return {"doubleValue": v}
+    return {"stringValue": str(v)}
+
+
+def _from_firestore_value(val):
+    if not isinstance(val, dict):
+        return val
+    if "stringValue" in val:
+        return val["stringValue"]
+    if "integerValue" in val:
+        return int(val["integerValue"])
+    if "doubleValue" in val:
+        return float(val["doubleValue"])
+    if "booleanValue" in val:
+        return bool(val["booleanValue"])
+    return str(val)
+
+
+def _doc_to_dict(doc):
+    out = {}
+    fields = doc.get("fields", {})
+    for k, v in fields.items():
+        out[k] = _from_firestore_value(v)
+    name = doc.get("name", "")
+    if "/" in name:
+        out["id"] = name.split("/")[-1]
+    return out
 
 
 def listar():
@@ -17,21 +75,21 @@ def listar():
         "alunos", "data", "inicio", "fim", "status", "justificativa", "criado_por"
     ]
     try:
-        db = get_db()
-        # Usa .get() em vez de .stream() com timeout explícito
-        docs = db.collection(COLLECTION_NAME).get(timeout=8)
-        dados = []
-        for doc in docs:
-            d = doc.to_dict() or {}
-            d["id"] = doc.id
-            dados.append(d)
+        cred, base_url = get_rest_context()
+        url = f"{base_url}/{COLLECTION_NAME}"
+        resp = requests.get(url, headers=_headers(cred), timeout=10)
+        resp.raise_for_status()
+
+        payload = resp.json()
+        docs = payload.get("documents", [])
+        dados = [_doc_to_dict(d) for d in docs]
 
         if not dados:
             return pd.DataFrame(columns=colunas)
 
         return pd.DataFrame(dados)
     except Exception as e:
-        st.error(f"Erro em listar() no Firestore: {type(e).__name__} - {e}")
+        st.error(f"Erro em listar() via REST: {type(e).__name__} - {e}")
         return pd.DataFrame(columns=colunas)
 
 
@@ -74,16 +132,22 @@ def horario_disponivel(sala, data, inicio, fim):
 
 
 def criar(dados):
-    db = get_db()
-    doc_ref = db.collection(COLLECTION_NAME).document()
-    doc_ref.set(dados, timeout=8)
-    return doc_ref.id
+    cred, base_url = get_rest_context()
+    url = f"{base_url}/{COLLECTION_NAME}"
+    body = {"fields": {k: _to_firestore_value(v) for k, v in dados.items()}}
+    resp = requests.post(url, headers=_headers(cred), json=body, timeout=10)
+    resp.raise_for_status()
+    created = resp.json()
+    name = created.get("name", "")
+    return name.split("/")[-1] if "/" in name else ""
 
 
 def alterar_status(id_reserva, status):
-    db = get_db()
-    doc_ref = db.collection(COLLECTION_NAME).document(str(id_reserva))
-    doc_ref.update({"status": status}, timeout=8)
+    cred, base_url = get_rest_context()
+    url = f"{base_url}/{COLLECTION_NAME}/{id_reserva}?updateMask.fieldPaths=status"
+    body = {"fields": {"status": _to_firestore_value(status)}}
+    resp = requests.patch(url, headers=_headers(cred), json=body, timeout=10)
+    resp.raise_for_status()
 
 
 def pd_to_num(s):
