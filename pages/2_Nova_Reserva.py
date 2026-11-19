@@ -85,6 +85,7 @@ with st.form("reserva"):
 
 
 if enviar:
+    st.write("1. Clique detectado, validando campos...")
     erros = []
 
     if not professor.strip():
@@ -102,28 +103,38 @@ if enviar:
     if erros:
         for erro in erros:
             st.error(erro)
-    elif not horario_disponivel(
-        sala,
-        data,
-        inicio.strftime("%H:%M"),
-        fim.strftime("%H:%M")
-    ):
-        st.error("Já existe uma reserva pendente ou confirmada nesse horário para esta sala.")
     else:
+        st.write("2. Verificando disponibilidade de horário...")
         try:
-            criar({
-                "professor": professor.strip(),
-                "disciplina": disciplina.strip(),
-                "sala": sala,
-                "tipo_aula": tipo,
-                "alunos": int(alunos),
-                "data": str(data),
-                "inicio": inicio.strftime("%H:%M"),
-                "fim": fim.strftime("%H:%M"),
-                "status": "Pendente",
-                "justificativa": justificativa.strip(),
-                "criado_por": usuario_atual()["email"]
-            })
-            st.success("Reserva enviada para análise com sucesso.")
+            disponivel = horario_disponivel(
+                sala,
+                data,
+                inicio.strftime("%H:%M"),
+                fim.strftime("%H:%M")
+            )
+            st.write(f"3. Disponibilidade retornou: {disponivel}")
         except Exception as e:
-            st.error(f"Falha ao salvar no Firestore: {e}")
+            st.error(f"Erro ao checar horário disponível: {e}")
+            st.stop()
+
+        if not disponivel:
+            st.error("Já existe uma reserva pendente ou confirmada nesse horário para esta sala.")
+        else:
+            st.write("4. Salvando no Firestore...")
+            try:
+                novo_id = criar({
+                    "professor": professor.strip(),
+                    "disciplina": disciplina.strip(),
+                    "sala": sala,
+                    "tipo_aula": tipo,
+                    "alunos": int(alunos),
+                    "data": str(data),
+                    "inicio": inicio.strftime("%H:%M"),
+                    "fim": fim.strftime("%H:%M"),
+                    "status": "Pendente",
+                    "justificativa": justificativa.strip(),
+                    "criado_por": usuario_atual()["email"]
+                })
+                st.success(f"Reserva enviada para análise com sucesso! ID: {novo_id}")
+            except Exception as e:
+                st.error(f"Falha ao salvar no Firestore: {type(e).__name__} - {e}")
