@@ -2,13 +2,21 @@ import streamlit as st
 from utils.firebase_utils import inicializar_firebase
 from datetime import datetime
 import pandas as pd
+from google.cloud import firestore as gc_firestore
 
 COLLECTION_NAME = "reservas"
 
 
 @st.cache_resource
 def get_db():
-    return inicializar_firebase()
+    db = inicializar_firebase()
+    try:
+        # Tenta forçar transporte REST caso o gRPC fique bloqueado no ambiente cloud
+        cred = db._client._credentials
+        project = db._client.project
+        return gc_firestore.Client(project=project, credentials=cred, transport="rest")
+    except Exception:
+        return db
 
 
 def listar():
@@ -18,7 +26,7 @@ def listar():
     ]
     try:
         db = get_db()
-        docs = list(db.collection(COLLECTION_NAME).stream(timeout=15))
+        docs = list(db.collection(COLLECTION_NAME).stream(timeout=10))
         dados = []
         for doc in docs:
             d = doc.to_dict() or {}
@@ -75,14 +83,14 @@ def horario_disponivel(sala, data, inicio, fim):
 def criar(dados):
     db = get_db()
     doc_ref = db.collection(COLLECTION_NAME).document()
-    doc_ref.set(dados, timeout=15)
+    doc_ref.set(dados, timeout=10)
     return doc_ref.id
 
 
 def alterar_status(id_reserva, status):
     db = get_db()
     doc_ref = db.collection(COLLECTION_NAME).document(str(id_reserva))
-    doc_ref.update({"status": status}, timeout=15)
+    doc_ref.update({"status": status}, timeout=10)
 
 
 def pd_to_num(s):
