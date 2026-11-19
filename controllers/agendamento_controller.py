@@ -1,6 +1,6 @@
 import json
+from datetime import datetime, timezone
 import streamlit as st
-from datetime import datetime
 import pandas as pd
 import requests
 import google.auth.transport.requests
@@ -15,14 +15,14 @@ def get_rest_context():
     with open("utils/serviceAccountKey.json", "r", encoding="utf-8") as f:
         info = json.load(f)
 
-    # Garante que \n escapado vire quebra de linha real na chave privada
     if "private_key" in info and isinstance(info["private_key"], str):
         info["private_key"] = info["private_key"].replace("\\n", "\n")
 
     cred = service_account.Credentials.from_service_account_info(info, scopes=SCOPES)
     project_id = info["project_id"]
+    client_email = info.get("client_email", "")
     base_url = f"https://firestore.googleapis.com/v1/projects/{project_id}/databases/(default)/documents"
-    return cred, base_url
+    return cred, base_url, project_id, client_email
 
 
 def _headers(cred):
@@ -69,13 +69,22 @@ def _doc_to_dict(doc):
     return out
 
 
+def _detalhe_erro(e):
+    try:
+        _, _, pid, email = get_rest_context()
+        utc_now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        return f"{type(e).__name__}: {e} | project={pid} | email={email} | {utc_now}"
+    except Exception:
+        return f"{type(e).__name__}: {e}"
+
+
 def listar():
     colunas = [
         "id", "professor", "disciplina", "sala", "tipo_aula",
         "alunos", "data", "inicio", "fim", "status", "justificativa", "criado_por"
     ]
     try:
-        cred, base_url = get_rest_context()
+        cred, base_url, _, _ = get_rest_context()
         url = f"{base_url}/{COLLECTION_NAME}"
         resp = requests.get(url, headers=_headers(cred), timeout=10)
         resp.raise_for_status()
@@ -89,7 +98,7 @@ def listar():
 
         return pd.DataFrame(dados)
     except Exception as e:
-        st.error(f"Erro em listar() via REST: {type(e).__name__} - {e}")
+        st.error(f"Erro em listar() via REST: {_detalhe_erro(e)}")
         return pd.DataFrame(columns=colunas)
 
 
@@ -132,7 +141,7 @@ def horario_disponivel(sala, data, inicio, fim):
 
 
 def criar(dados):
-    cred, base_url = get_rest_context()
+    cred, base_url, _, _ = get_rest_context()
     url = f"{base_url}/{COLLECTION_NAME}"
     body = {"fields": {k: _to_firestore_value(v) for k, v in dados.items()}}
     resp = requests.post(url, headers=_headers(cred), json=body, timeout=10)
@@ -143,7 +152,7 @@ def criar(dados):
 
 
 def alterar_status(id_reserva, status):
-    cred, base_url = get_rest_context()
+    cred, base_url, _, _ = get_rest_context()
     url = f"{base_url}/{COLLECTION_NAME}/{id_reserva}?updateMask.fieldPaths=status"
     body = {"fields": {"status": _to_firestore_value(status)}}
     resp = requests.patch(url, headers=_headers(cred), json=body, timeout=10)
