@@ -1,106 +1,47 @@
-import base64
 import json
-import re
-import time
 from datetime import datetime, timezone
 import streamlit as st
 import pandas as pd
 import requests
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding
 
 COLLECTION_NAME = "reservas"
-TOKEN_URI_DEFAULT = "https://oauth2.googleapis.com/token"
-SCOPE = "https://www.googleapis.com/auth/datastore"
-
-_TOKEN_CACHE = {"token": None, "exp": 0.0}
-
-
-def _b64url(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
-
-
-def _normalizar_chave_pem(raw_key: str) -> str:
-    key = raw_key.replace("\\n", "\n").replace("\r\n", "\n").strip()
-    match = re.search(
-        r"(-----BEGIN [A-Z0-9 ]+-----)(.+?)(-----END [A-Z0-9 ]+-----)",
-        key,
-        flags=re.DOTALL,
-    )
-    if not match:
-        return key
-    header, body, footer = match.groups()
-    clean_body = re.sub(r"\s+", "", body)
-    wrapped = "\n".join(clean_body[i : i + 64] for i in range(0, len(clean_body), 64))
-    return f"{header}\n{wrapped}\n{footer}\n"
+DEFAULT_PROJECT_ID = "reserva-salas-bb922"
 
 
 @st.cache_resource
-def get_rest_context():
-    with open("utils/serviceAccountKey.json", "r", encoding="utf-8") as f:
-        info = json.load(f)
+def get_rest_config():
+    api_key = ""
+    project_id = DEFAULT_PROJECT_ID
 
-    project_id = info["project_id"]
-    client_email = info["client_email"]
-    token_uri = info.get("token_uri") or TOKEN_URI_DEFAULT
-    private_key_pem = _normalizar_chave_pem(info["private_key"])
+    if "firestore" in st.secrets:
+        api_key = str(st.secrets["firestore"].get("api_key", "")).strip()
+        project_id = str(st.secrets["firestore"].get("project_id", project_id)).strip()
+    elif "firebase_api_key" in st.secrets:
+        api_key = str(st.secrets["firebase_api_key"]).strip()
 
-    private_key = serialization.load_pem_private_key(
-        private_key_pem.encode("utf-8"),
-        password=None,
-    )
+    if not api_key:
+        try:
+            with open("utils/serviceAccountKey.json", "r", encoding="utf-8") as f:
+                info = json.load(f)
+            project_id = info.get("project_id") or project_id
+            api_key = str(info.get("api_key", "")).strip()
+        except Exception:
+            pass
+
+    if not api_key:
+        raise RuntimeError(
+            'api_key não encontrada. Adicione [firestore] api_key = "AIza..." nos Secrets do Streamlit Cloud.'
+        )
+
     base_url = f"https://firestore.googleapis.com/v1/projects/{project_id}/databases/(default)/documents"
-    return private_key, client_email, token_uri, base_url, project_id
+    return base_url, api_key, project_id
 
 
-def _obter_access_token() -> str:
-    now = time.time()
-    if _TOKEN_CACHE["token"] and now < (_TOKEN_CACHE["exp"] - 60):
-        return _TOKEN_CACHE["token"]
-
-    private_key, client_email, token_uri, _, _ = get_rest_context()
-    iat = int(now)
-    exp = iat + 3600
-
-    header = {"alg": "RS256", "typ": "JWT"}
-    payload = {
-        "iss": client_email,
-        "sub": client_email,
-        "aud": token_uri,
-        "iat": iat,
-        "exp": exp,
-        "scope": SCOPE,
-    }
-
-    signing_input = f"{_b64url(json.dumps(header, separators=(',', ':')).encode('utf-8'))}.{_b64url(json.dumps(payload, separators=(',', ':')).encode('utf-8'))}".encode("ascii")
-    signature = private_key.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
-    assertion = f"{signing_input.decode('ascii')}.{_b64url(signature)}"
-
-    resp = requests.post(
-        token_uri,
-        data={
-            "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
-            "assertion": assertion,
-        },
-        timeout=10,
-    )
-    if resp.status_code != 200:
-        raise RuntimeError(f"OAuth HTTP {resp.status_code}: {resp.text}")
-
-    data = resp.json()
-    access_token = data["access_token"]
-    expires_in = int(data.get("expires_in", 3600))
-    _TOKEN_CACHE["token"] = access_token
-    _TOKEN_CACHE["exp"] = now + expires_in
-    return access_token
-
-
-def _headers() -> dict:
-    token = _obter_access_token()
-    return {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
+def _url(path: str = "") -> str:
+    base_url, api_key, _ = get_rest_config()
+    target = f"{base_url}/{COLLECTION_NAME}" if not path else f"{base_url}/{COLLECTION_NAME}/{path}"
+    sep = "&" if "?" in target else "?"
+    return f"{target}{sep}key={api_key}"
 
 
 def _to_firestore_value(v):
@@ -139,12 +80,12 @@ def _doc_to_dict(doc):
 
 
 def _detalhe_erro(e):
+    utc_now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     try:
-        _, email, _, _, pid = get_rest_context()
-        utc_now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-        return f"{type(e).__name__}: {e} | project={pid} | email={email} | {utc_now}"
+        _, _, pid = get_rest_config()
+        return f"{type(e).__name__}: {e} | project={pid} | {utc_now}"
     except Exception:
-        return f"{type(e).__name__}: {e}"
+        return f"{type(e).__name__}: {e} | {utc_now}"
 
 
 def listar():
@@ -153,10 +94,9 @@ def listar():
         "alunos", "data", "inicio", "fim", "status", "justificativa", "criado_por"
     ]
     try:
-        _, _, _, base_url, _ = get_rest_context()
-        url = f"{base_url}/{COLLECTION_NAME}"
-        resp = requests.get(url, headers=_headers(), timeout=10)
-        resp.raise_for_status()
+        resp = requests.get(_url(), timeout=10)
+        if resp.status_code >= 400:
+            raise RuntimeError(f"Firestore GET HTTP {resp.status_code}: {resp.text}")
 
         payload = resp.json()
         docs = payload.get("documents", [])
@@ -210,10 +150,8 @@ def horario_disponivel(sala, data, inicio, fim):
 
 
 def criar(dados):
-    _, _, _, base_url, _ = get_rest_context()
-    url = f"{base_url}/{COLLECTION_NAME}"
     body = {"fields": {k: _to_firestore_value(v) for k, v in dados.items()}}
-    resp = requests.post(url, headers=_headers(), json=body, timeout=10)
+    resp = requests.post(_url(), json=body, timeout=10)
     if resp.status_code >= 400:
         raise RuntimeError(f"Firestore POST HTTP {resp.status_code}: {resp.text}")
     created = resp.json()
@@ -222,10 +160,9 @@ def criar(dados):
 
 
 def alterar_status(id_reserva, status):
-    _, _, _, base_url, _ = get_rest_context()
-    url = f"{base_url}/{COLLECTION_NAME}/{id_reserva}?updateMask.fieldPaths=status"
+    url = _url(f"{id_reserva}?updateMask.fieldPaths=status")
     body = {"fields": {"status": _to_firestore_value(status)}}
-    resp = requests.patch(url, headers=_headers(), json=body, timeout=10)
+    resp = requests.patch(url, json=body, timeout=10)
     if resp.status_code >= 400:
         raise RuntimeError(f"Firestore PATCH HTTP {resp.status_code}: {resp.text}")
 
