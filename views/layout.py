@@ -1,5 +1,6 @@
 import streamlit as st
 from utils.auth import logout, usuario_atual
+from utils.firestore_client import FirestoreError
 
 def configurar_pagina():
     st.set_page_config(
@@ -38,3 +39,13 @@ def menu_lateral():
     if st.sidebar.button("Sair", use_container_width=True):
         logout()
         st.switch_page("pages/0_Login.py")
+
+
+def carregar(funcao, *args, **kwargs):
+    """Executa uma leitura do Firestore; se falhar, mostra o erro real e interrompe a página
+    (em vez de exibir listas vazias/contadores zerados que parecem 'dados desatualizados')."""
+    try:
+        return funcao(*args, **kwargs)
+    except FirestoreError as e:
+        st.error(f"Não foi possível acessar o Firestore: {e}")
+        st.stop()

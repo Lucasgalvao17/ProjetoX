@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // O app acessa o Firestore SOMENTE pelo servidor (Streamlit) com conta de serviço,
+    // que não passa por estas regras. Navegadores/clientes externos ficam bloqueados.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

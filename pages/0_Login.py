@@ -1,5 +1,6 @@
 import streamlit as st
 from utils.auth import login, cadastrar_usuario, usuario_logado
+from utils.firestore_client import FirestoreError
 from views.layout import configurar_pagina
 
 configurar_pagina()
@@ -17,11 +18,14 @@ with tab1:
     email = st.text_input("E-mail", key="login_email")
     senha = st.text_input("Senha", type="password", key="login_senha")
     if st.button("Entrar", type="primary", use_container_width=True):
-        if login(email, senha):
-            st.success("Login realizado.")
-            st.switch_page("app.py")
-        else:
-            st.error("E-mail ou senha inválidos.")
+        try:
+            if login(email, senha):
+                st.success("Login realizado.")
+                st.switch_page("app.py")
+            else:
+                st.error("E-mail ou senha inválidos.")
+        except FirestoreError as e:
+            st.error(f"Não foi possível acessar o Firestore: {e}")
 
 with tab2:
     st.subheader("Crie sua conta")
@@ -33,10 +37,9 @@ with tab2:
     if st.button("Criar conta", type="primary", use_container_width=True):
         if senha2 != senha3:
             st.error("As senhas não coincidem.")
-        elif len(senha2) < 6:
-            st.error("A senha deve ter pelo menos 6 caracteres.")
         else:
-            ok, msg = cadastrar_usuario(nome, email2, senha2, perfil)
-            (st.success if ok else st.error)(msg)
-
-st.info("Administrador padrão para testes: admin@atila.local / admin123")
+            try:
+                ok, msg = cadastrar_usuario(nome, email2, senha2, perfil)
+                (st.success if ok else st.error)(msg)
+            except FirestoreError as e:
+                st.error(f"Não foi possível acessar o Firestore: {e}")

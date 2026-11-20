@@ -1,7 +1,8 @@
 import streamlit as st
 from controllers.sala_controller import listar, cadastrar, excluir
 from utils.auth import usuario_logado, somente_admin
-from views.layout import configurar_pagina, menu_lateral
+from utils.firestore_client import FirestoreError
+from views.layout import configurar_pagina, menu_lateral, carregar
 
 configurar_pagina()
 if not usuario_logado(): st.switch_page("pages/0_Login.py")
@@ -29,20 +30,30 @@ if somente_admin():
             acess=st.selectbox("Acessibilidade",["Sim","Não"])
             obs=st.text_area("Observações")
         if st.form_submit_button("Cadastrar sala", type="primary"):
-            if not sala.strip():
-                st.error("Informe o nome da sala.")
-            else:
+            try:
                 cadastrar({"sala":sala,"capacidade":capacidade,"tipo":tipo,"campus":campus,"predio":predio,"andar":andar,"numero":numero,"computadores":computadores,"projetor":projetor,"ar_condicionado":ar,"acessibilidade":acess,"observacoes":obs})
                 st.success("Sala cadastrada.")
                 st.rerun()
+            except ValueError as e:
+                st.error(str(e))
+            except FirestoreError as e:
+                st.error(f"Falha ao salvar no Firestore: {e}")
 else:
     st.info("Somente administradores podem cadastrar ou excluir salas.")
 
 st.subheader("Salas cadastradas")
-df=listar()
-st.dataframe(df,use_container_width=True,hide_index=True)
+df = carregar(listar)
+st.dataframe(df, use_container_width=True, hide_index=True)
 
 if somente_admin() and not df.empty:
-    id_excluir=st.selectbox("ID da sala para excluir",df["id"].tolist())
+    rotulos = dict(zip(df["id"], df["sala"].astype(str)))
+    id_excluir = st.selectbox("Sala para excluir", df["id"].tolist(), format_func=lambda i: rotulos.get(i, i))
     if st.button("Excluir sala"):
-        excluir(id_excluir); st.success("Sala excluída."); st.rerun()
+        try:
+            excluir(id_excluir)
+            st.success("Sala excluída.")
+            st.rerun()
+        except ValueError as e:
+            st.error(str(e))
+        except FirestoreError as e:
+            st.error(f"Falha ao excluir no Firestore: {e}")

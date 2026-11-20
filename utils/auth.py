@@ -1,64 +1,65 @@
-import hashlib
+import re
+
 import streamlit as st
-from models.csv_repository import ler_csv, adicionar_linha
 
-COLS = ["id","nome","email","senha","perfil","ativo"]
+from controllers import usuario_controller as uc
+from utils.firestore_client import DocumentoJaExiste
 
-def hash_senha(senha):
-    return hashlib.sha256(senha.encode("utf-8")).hexdigest()
-
-def garantir_admin():
-    df = ler_csv("usuarios.csv", COLS)
-    if df.empty:
-        adicionar_linha("usuarios.csv", {
-            "id": 1,
-            "nome": "Administrador",
-            "email": "admin@atila.local",
-            "senha": hash_senha("admin123"),
-            "perfil": "Administrador",
-            "ativo": "Sim"
-        }, COLS)
 
 def login(email, senha):
-    garantir_admin()
-    df = ler_csv("usuarios.csv", COLS)
-    if df.empty:
+    """True se as credenciais forem válidas e o usuário estiver ativo."""
+    usuario = uc.obter_por_email(email)
+    if not usuario or str(usuario.get("ativo")) != "Sim":
         return False
-    encontrado = df[(df["email"].astype(str).str.lower() == email.strip().lower()) &
-                    (df["senha"] == hash_senha(senha)) &
-                    (df["ativo"].astype(str) == "Sim")]
-    if encontrado.empty:
+    if not uc.verificar_senha(senha, usuario.get("senha")):
         return False
-    row = encontrado.iloc[0].to_dict()
+    if uc.hash_legado(usuario.get("senha")):      # migra SHA-256 puro -> PBKDF2 com sal
+        uc.definir_senha(usuario["id"], uc.gerar_hash(senha))
     st.session_state["usuario"] = {
-        "id": int(row["id"]), "nome": row["nome"],
-        "email": row["email"], "perfil": row["perfil"]
+        "id": usuario["id"], "nome": usuario.get("nome", ""),
+        "email": usuario.get("email", ""), "perfil": usuario.get("perfil", "Professor"),
     }
     return True
 
+
 def cadastrar_usuario(nome, email, senha, perfil="Professor"):
-    garantir_admin()
-    df = ler_csv("usuarios.csv", COLS)
-    if not email or not senha or not nome:
+    if not (nome or "").strip() or not (email or "").strip() or not senha:
         return False, "Preencha todos os campos."
-    if not df.empty and (df["email"].astype(str).str.lower() == email.strip().lower()).any():
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email.strip()):
+        return False, "Informe um e-mail válido."
+    if len(senha) < 6:
+        return False, "A senha deve ter pelo menos 6 caracteres."
+    if perfil not in uc.PERFIS:
+        return False, "Perfil inválido."
+    try:
+        uc.criar(nome, email, uc.gerar_hash(senha), perfil)
+    except DocumentoJaExiste:
         return False, "Este e-mail já está cadastrado."
-    novo_id = 1 if df.empty else int(df["id"].max()) + 1
-    adicionar_linha("usuarios.csv", {
-        "id": novo_id, "nome": nome.strip(), "email": email.strip().lower(),
-        "senha": hash_senha(senha), "perfil": perfil, "ativo": "Sim"
-    }, COLS)
     return True, "Conta criada com sucesso."
+
+
+def alterar_senha(uid, senha_atual, nova_senha):
+    usuario = uc.obter(uid)
+    if not usuario or not uc.verificar_senha(senha_atual, usuario.get("senha")):
+        return False, "Senha atual incorreta."
+    if len(nova_senha) < 6:
+        return False, "A nova senha deve ter pelo menos 6 caracteres."
+    uc.definir_senha(uid, uc.gerar_hash(nova_senha))
+    return True, "Senha alterada com sucesso."
+
 
 def usuario_logado():
     return "usuario" in st.session_state
 
+
 def usuario_atual():
     return st.session_state.get("usuario")
+
 
 def logout():
     st.session_state.pop("usuario", None)
 
+
 def somente_admin():
     user = usuario_atual()
-    return user and user["perfil"] == "Administrador"
+    return bool(user and user["perfil"] == "Administrador")
