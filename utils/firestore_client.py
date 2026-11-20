@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import numbers
 import os
+import re
 from dataclasses import dataclass
 from urllib.parse import quote
 
@@ -82,11 +83,17 @@ def _conexao() -> _Conexao:
         except ImportError as exc:
             raise FirestoreError("Dependência ausente: adicione 'google-auth' ao requirements.txt.") from exc
         info = dict(conta)
-        info["private_key"] = str(info.get("private_key", "")).replace("\\n", "\n")
+        info["private_key"] = normalizar_chave_privada(info.get("private_key", ""))
+        problemas = problemas_conta(info)
+        if problemas:
+            raise FirestoreError("[gcp_service_account] com problema — " + "; ".join(problemas) + ".")
         try:
             credenciais = service_account.Credentials.from_service_account_info(info, scopes=[ESCOPO])
         except Exception as exc:
-            raise FirestoreError(f"[gcp_service_account] inválido nos secrets ({type(exc).__name__}).") from None
+            # a mensagem do google-auth/cryptography não contém o conteúdo da chave
+            raise FirestoreError(
+                f"[gcp_service_account] rejeitado pelo google-auth ({type(exc).__name__}: {str(exc)[:200]})"
+            ) from None
         project_id = str(info.get("project_id") or project_id)
         return _Conexao(AuthorizedSession(credenciais), _base_url(project_id), {}, "service_account", project_id)
 
@@ -99,6 +106,48 @@ def _conexao() -> _Conexao:
         "Credenciais do Firestore não configuradas. Adicione [gcp_service_account] "
         "nos Secrets do Streamlit (veja .streamlit/secrets.toml.example)."
     )
+
+
+CAMPOS_CONTA = ("type", "project_id", "private_key_id", "private_key", "client_email", "token_uri")
+
+
+def normalizar_chave_privada(texto) -> str:
+    """Reconstrói o PEM mesmo que a colagem nos Secrets tenha estragado as quebras de linha
+    (\\n literais, \\\\n duplos, espaços no lugar de quebras, aspas sobrando, CRLF)."""
+    t = str(texto or "").strip().strip("\"'")
+    t = re.sub(r"\\+r", "", t)
+    t = re.sub(r"\\+n", "\n", t).replace("\r", "")
+    m = re.search(r"-----BEGIN ([A-Z ]*PRIVATE KEY)-----(.*?)-----END \1-----", t, re.S)
+    if not m:
+        return t
+    corpo = re.sub(r"[^A-Za-z0-9+/=]", "", m.group(2))
+    linhas = [corpo[i:i + 64] for i in range(0, len(corpo), 64)]
+    return f"-----BEGIN {m.group(1)}-----\n" + "\n".join(linhas) + f"\n-----END {m.group(1)}-----\n"
+
+
+def problemas_conta(info: dict) -> list[str]:
+    """Lista o que está errado em [gcp_service_account], SEM revelar valores secretos."""
+    achados = []
+    faltando = [c for c in CAMPOS_CONTA if not str(info.get(c, "")).strip()]
+    if faltando:
+        achados.append("campos ausentes ou vazios: " + ", ".join(faltando))
+    if info.get("type") and info.get("type") != "service_account":
+        achados.append("'type' deve ser exatamente service_account")
+    if info.get("client_email") and "@" not in str(info["client_email"]):
+        achados.append("'client_email' não parece um e-mail")
+    if info.get("token_uri") and not str(info["token_uri"]).startswith("https://"):
+        achados.append("'token_uri' deve começar com https://")
+    chave = str(info.get("private_key", ""))
+    if chave.strip():
+        m = re.search(r"-----BEGIN [A-Z ]*PRIVATE KEY-----(.*?)-----END [A-Z ]*PRIVATE KEY-----", chave, re.S)
+        if not m:
+            achados.append("'private_key' sem a linha BEGIN/END PRIVATE KEY (colagem cortada?)")
+        else:
+            corpo = re.sub(r"[^A-Za-z0-9+/=]", "", m.group(1))
+            if len(corpo) % 4 != 0 or len(corpo) < 1000:
+                achados.append(f"'private_key' parece truncada/alterada (corpo com {len(corpo)} caracteres; "
+                               "uma chave RSA-2048 tem ~1600)")
+    return achados
 
 
 def modo_conexao() -> str:
