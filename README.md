@@ -8,20 +8,37 @@ Não há CSV de dados nem cache: o que uma aba grava aparece nas outras na hora.
 ## Estrutura
 ```
 app.py                         Dashboard (entrada)
-pages/                         Login, Salas, Nova Reserva, Agendamentos, Usuários, Disciplinas, Perfil
+pages/                         Login, Salas, Nova Reserva, Agendamentos, Usuários, Disciplinas, Perfil,
+                               Minhas Reservas e Disponibilidade (professor)
 controllers/                   sala_, agendamento_, usuario_, disciplina_, dashboard_controller
 utils/firestore_client.py      ÚNICO cliente REST do Firestore (paginação, erros, tipos)
 utils/auth.py                  login/sessão (usuários no Firestore, senha PBKDF2 com sal)
+utils/tempo.py                 hora local do sistema (padrão America/Porto_Velho; mude com ATILA_FUSO)
+views/layout.py                menu por perfil + avisos; views/reservas_view.py = as 4 tabelas
 data/seed/                     CSVs usados UMA vez para popular coleções vazias (usuarios, disciplinas)
 firestore.rules                regras (bloqueia acesso direto de navegadores)
-tests/                         58 testes (Firestore falso + páginas)
+tests/                         107 testes (Firestore falso + páginas)
 ```
 
 Coleções: `salas`, `reservas`, `usuarios`, `disciplinas`.
 
+## Perfis
+| | Professor / Solicitante | Administrador |
+|---|---|---|
+| Início | resumo das próprias reservas | Dashboard completo |
+| Reservas | solicitar, acompanhar as suas, cancelar as suas | aprovar, reprovar, cancelar, reabrir (todas) |
+| Salas | só consulta disponibilidade | cadastrar, **editar**, excluir |
+| Disciplinas | escolhe na lista | cadastrar, editar, ativar/desativar |
+| Usuários | altera a própria senha | criar, editar perfil, ativar/desativar, redefinir senha |
+
+## Tela de Agendamentos (4 tabelas)
+**Aprovados** (confirmadas por vir) · **Pendentes** · **Cancelados** · **Histórico** (reprovadas + aprovadas já realizadas).
+Reprovar/cancelar só muda o `status` (e grava `motivo`, `atualizado_por`, `atualizado_em`): o documento nunca é apagado.
+"Concluída" é calculado pela data/hora, sem gravar nada.
+
 ## Configuração (Firebase + Streamlit Cloud)
 1. Firebase Console → Configurações do projeto → Contas de serviço → **Gerar nova chave privada**.
-2. Streamlit Cloud → app → Settings → **Secrets**: cole conforme `.streamlit/secrets.toml.example`.
+2. Gere o bloco de Secrets SEM copiar à mão: `python scripts/gerar_secrets_toml.py "caminho\chave.json"` e cole a saída em Streamlit Cloud → app → Settings → **Secrets** (modelo em `.streamlit/secrets.toml.example`).
 3. Faça deploy e confirme que o Dashboard abre sem o aviso de "modo legado".
 4. Firebase Console → Firestore → Regras: publique o conteúdo de `firestore.rules`.
 5. Google Cloud Console → IAM → Contas de serviço: **exclua a chave antiga** (a que estava em `utils/serviceAccountKey.json`).

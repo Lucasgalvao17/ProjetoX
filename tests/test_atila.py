@@ -20,9 +20,9 @@ st.secrets.update({"firestore": {"project_id": ff.PROJETO}})
 
 from controllers import (agendamento_controller as ag, dashboard_controller as dash,   # noqa: E402
                          disciplina_controller as dc, sala_controller as sc, usuario_controller as uc)
-from utils import auth, firestore_client as fs   # noqa: E402
+from utils import auth, firestore_client as fs, tempo   # noqa: E402
 
-AMANHA = str(date.today() + timedelta(days=1))
+AMANHA = str(tempo.hoje() + timedelta(days=1))
 
 
 def sala(nome, cap=40, tipo="Teórica", **extra):
@@ -138,7 +138,7 @@ class TestAgendamentos(Base):
         ag.criar(reserva(ini="16:00", fim="18:00"))
         ag.criar(reserva(ini="12:00", fim="14:00"))
         ag.criar(reserva(salanome="Outra", ini="14:00", fim="16:00"))
-        ag.criar(reserva(data=str(date.today() + timedelta(days=2))))
+        ag.criar(reserva(data=str(tempo.hoje() + timedelta(days=2))))
         self.assertEqual(len(ag.listar()), 5)
 
     def test_cancelada_e_reprovada_liberam_o_horario(self):
@@ -326,6 +326,68 @@ class TestAuth(Base):
 
     def test_lista_de_usuarios_nao_expoe_senha(self):
         self.assertNotIn("senha", uc.listar().columns)
+
+
+try:
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    TEM_CRYPTO = True
+except ImportError:      # pragma: no cover
+    TEM_CRYPTO = False
+
+
+@unittest.skipUnless(TEM_CRYPTO, "cryptography não instalado")
+class TestChaveDaContaDeServico(unittest.TestCase):
+    """Chave RSA DESCARTÁVEL gerada na hora; simula colagens defeituosas nos Secrets."""
+
+    @classmethod
+    def setUpClass(cls):
+        k = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        cls.pem = k.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                  serialization.NoEncryption()).decode()
+        cls.base = {"type": "service_account", "project_id": "p", "private_key_id": "abc",
+                    "client_email": "sa@p.iam.gserviceaccount.com", "token_uri": "https://oauth2.googleapis.com/token"}
+
+    def _carrega(self, texto):
+        chave = fs.normalizar_chave_privada(texto)
+        serialization.load_pem_private_key(chave.encode(), password=None)     # levanta ValueError se inválida
+        return chave
+
+    def test_variantes_de_colagem_viram_pem_valido(self):
+        corpo = self.pem
+        variantes = {
+            "correta": corpo,
+            "barra-n literal": corpo.replace("\n", "\\n"),
+            "barra-n duplo": corpo.replace("\n", "\\\\n"),
+            "espacos no lugar de quebras": corpo.replace("\n", " "),
+            "crlf": corpo.replace("\n", "\r\n"),
+            "entre aspas": '"' + corpo.replace("\n", "\\n") + '"',
+            "sem quebra final": corpo.rstrip("\n"),
+            "quebras literais com cr": corpo.replace("\n", "\\r\\n"),
+        }
+        for nome, texto in variantes.items():
+            with self.subTest(nome):
+                self.assertEqual(self._carrega(texto), self.pem)
+
+    def test_conta_valida_sem_problemas(self):
+        self.assertEqual(fs.problemas_conta({**self.base, "private_key": self.pem}), [])
+
+    def test_campos_ausentes_sao_nomeados(self):
+        info = {k: v for k, v in self.base.items() if k not in ("token_uri", "private_key_id")}
+        achados = " ".join(fs.problemas_conta({**info, "private_key": self.pem}))
+        self.assertIn("token_uri", achados)
+        self.assertIn("private_key_id", achados)
+
+    def test_chave_truncada_e_sem_cabecalho(self):
+        cortada = self.pem[:len(self.pem) // 2]
+        self.assertTrue(any("BEGIN/END" in a for a in fs.problemas_conta({**self.base, "private_key": cortada})))
+        meio = fs.normalizar_chave_privada(self.pem[: len(self.pem) // 2] + "\n-----END PRIVATE KEY-----")
+        self.assertTrue(any("truncada" in a for a in fs.problemas_conta({**self.base, "private_key": meio})))
+
+    def test_mensagem_de_diagnostico_nao_vaza_a_chave(self):
+        achados = " ".join(fs.problemas_conta({**self.base, "private_key": self.pem[:300]}))
+        corpo = self.pem.splitlines()[1]
+        self.assertNotIn(corpo, achados)
 
 
 class TestDisciplinas(Base):

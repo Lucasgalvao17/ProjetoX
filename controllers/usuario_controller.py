@@ -12,7 +12,8 @@ from utils.tabelas import para_dataframe
 
 COLECAO = "usuarios"
 PERFIS = ("Administrador", "Professor", "Solicitante")
-COLUNAS = ["id", "nome", "email", "perfil", "ativo", "criado_em"]
+COLUNAS = ["id", "nome", "email", "perfil", "ativo", "criado_em", "ultimo_login"]
+MIN_SENHA = 6
 ITERACOES = 240_000
 PREFIXO = "pbkdf2_sha256"
 
@@ -100,9 +101,65 @@ def criar(nome: str, email: str, senha_hash: str, perfil: str) -> str:
     }, doc_id=id_por_email(email))["id"]
 
 
-def definir_ativo(uid: str, ativo: str) -> None:
+def definir_senha(uid: str, senha_hash: str) -> None:
+    fs.atualizar(COLECAO, uid, {"senha": senha_hash})
+
+
+def registrar_login(uid: str) -> None:
+    fs.atualizar(COLECAO, uid, {"ultimo_login": _agora()})
+
+
+# ---------- gestão pelo administrador (as proteções valem aqui, não só na tela) ----------
+def _admins_ativos_exceto(uid: str) -> int:
+    df = listar()
+    return int(((df["perfil"] == "Administrador") & (df["ativo"] == "Sim") & (df["id"] != uid)).sum())
+
+
+def _proteger_admin(alvo: dict, uid: str, executor_id: str | None, nova_ativo: str, novo_perfil: str) -> None:
+    deixa_de_ser_admin_ativo = (
+        alvo.get("perfil") == "Administrador" and alvo.get("ativo") == "Sim"
+        and (nova_ativo != "Sim" or novo_perfil != "Administrador")
+    )
+    if not deixa_de_ser_admin_ativo:
+        return
+    if executor_id is not None and str(executor_id) == str(uid):
+        raise ValueError("Você não pode desativar nem rebaixar o seu próprio usuário.")
+    if _admins_ativos_exceto(uid) == 0:
+        raise ValueError("O sistema precisa de pelo menos um administrador ativo.")
+
+
+def definir_ativo(uid: str, ativo: str, executor_id: str | None = None) -> None:
+    if ativo not in ("Sim", "Não"):
+        raise ValueError("Situação inválida.")
+    alvo = obter(uid)
+    if alvo is None:
+        raise ValueError("Usuário não encontrado.")
+    _proteger_admin(alvo, uid, executor_id, ativo, alvo.get("perfil", ""))
     fs.atualizar(COLECAO, uid, {"ativo": ativo})
 
 
-def definir_senha(uid: str, senha_hash: str) -> None:
-    fs.atualizar(COLECAO, uid, {"senha": senha_hash})
+def atualizar(uid: str, nome: str, perfil: str, executor_id: str | None = None) -> None:
+    """Edita nome e perfil de um usuário (o e-mail é a identidade e não muda)."""
+    nome = " ".join(str(nome).split())
+    if not nome:
+        raise ValueError("Informe o nome.")
+    if perfil not in PERFIS:
+        raise ValueError("Perfil inválido.")
+    alvo = obter(uid)
+    if alvo is None:
+        raise ValueError("Usuário não encontrado.")
+    _proteger_admin(alvo, uid, executor_id, alvo.get("ativo", "Sim"), perfil)
+    fs.atualizar(COLECAO, uid, {"nome": nome, "perfil": perfil})
+
+
+def redefinir_senha(uid: str, nova_senha: str, por_email: str) -> None:
+    """O administrador define a nova senha de alguém (guardada só como hash PBKDF2 com sal)."""
+    if len(nova_senha or "") < MIN_SENHA:
+        raise ValueError(f"A senha deve ter pelo menos {MIN_SENHA} caracteres.")
+    if obter(uid) is None:
+        raise ValueError("Usuário não encontrado.")
+    fs.atualizar(COLECAO, uid, {
+        "senha": gerar_hash(nova_senha),
+        "senha_redefinida_por": por_email,
+        "senha_redefinida_em": _agora(),
+    })

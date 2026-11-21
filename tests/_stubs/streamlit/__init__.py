@@ -31,7 +31,9 @@ class _Ctx:
 
 class _Sidebar(_Ctx):
     def __getattr__(self, nome):
-        if nome in ("page_link", "markdown", "caption", "divider"):
+        if nome == "page_link":
+            return lambda pagina, *a, **k: SAIDA.append(("menu", pagina))
+        if nome in ("markdown", "caption", "divider"):
             return lambda *a, **k: None
         if nome == "button":
             return lambda *a, **k: False
@@ -81,25 +83,32 @@ def text_input(rotulo, value="", key=None, **k): return _entrada(rotulo, value, 
 def text_area(rotulo, value="", key=None, **k): return _entrada(rotulo, value, key)
 def number_input(rotulo, min_value=None, max_value=None, value=None, *a, **k):
     if value is None and a: value = a[0]
-    return _entrada(rotulo, value if value is not None else min_value)
-def date_input(rotulo, value=None, **k): return _entrada(rotulo, value)
-def time_input(rotulo, value=None, **k): return _entrada(rotulo, value)
+    return _entrada(rotulo, value if value is not None else min_value, k.get("key"))
+def date_input(rotulo, value=None, key=None, **k): return _entrada(rotulo, value, key)
+def time_input(rotulo, value=None, key=None, **k): return _entrada(rotulo, value, key)
 def selectbox(rotulo, opcoes, *a, **k):
     opcoes = list(opcoes)
-    v = _entrada(rotulo, None)
-    return v if v is not None else (opcoes[0] if opcoes else None)
-def multiselect(rotulo, opcoes=(), **k): return _entrada(rotulo, [])
-def button(rotulo, *a, **k): return bool(_entrada(rotulo, False))
-def form_submit_button(rotulo, *a, **k): return bool(_entrada(rotulo, False))
+    v = _entrada(rotulo, None, k.get("key"))
+    if v is not None:
+        return v
+    return opcoes[k.get("index", 0) or 0] if opcoes else None
+def multiselect(rotulo, opcoes=(), key=None, **k): return _entrada(rotulo, [], key)
+def checkbox(rotulo, value=False, key=None, **k): return bool(_entrada(rotulo, value, key))
+def button(rotulo, *a, **k): return bool(_entrada(rotulo, False, k.get("key")))
+def form_submit_button(rotulo, *a, **k): return bool(_entrada(rotulo, False, k.get("key")))
+def page_link(pagina, *a, **k): SAIDA.append(("link", pagina))
 def form(*a, **k): return _Ctx()
-def tabs(rotulos): return [_Ctx() for _ in rotulos]
+def tabs(rotulos):
+    for r in rotulos: SAIDA.append(("tab", str(r)))
+    return [_Ctx() for _ in rotulos]
+def metric(rotulo, valor, *a, **k): SAIDA.append(("metric", f"{rotulo}={valor}"))
 
 
 class _Coluna(_Ctx):
     def metric(self, rotulo, valor, *a, **k): SAIDA.append(("metric", f"{rotulo}={valor}"))
     def header(self, t, *a, **k): SAIDA.append(("header", t))
-    def button(self, rotulo, *a, **k): return bool(_entrada(rotulo, False))
-    def text_input(self, rotulo, value="", **k): return _entrada(rotulo, value)
+    def button(self, rotulo, *a, **k): return bool(_entrada(rotulo, False, k.get("key")))
+    def text_input(self, rotulo, value="", key=None, **k): return _entrada(rotulo, value, key)
 
 
 def columns(spec, *a, **k):

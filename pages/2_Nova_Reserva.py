@@ -1,9 +1,11 @@
 import streamlit as st
-from datetime import date, time
+from datetime import time
 
 from controllers.sala_controller import listar as listar_salas
+from controllers.disciplina_controller import listar_ativas as listar_disciplinas, rotulo as rotulo_disciplina
 from controllers.agendamento_controller import criar, ConflitoHorario
-from utils.auth import usuario_logado, usuario_atual
+from utils import tempo
+from utils.auth import usuario_logado, usuario_atual, somente_admin
 from utils.firestore_client import FirestoreError
 from utils.tabelas import para_numero
 from views.layout import configurar_pagina, menu_lateral, carregar
@@ -14,25 +16,37 @@ if not usuario_logado():
     st.switch_page("pages/0_Login.py")
 
 menu_lateral()
+usuario = usuario_atual()
 
 st.title("Nova reserva")
 st.caption("A sala será recomendada conforme capacidade, tipo e recursos.")
 
 salas = carregar(listar_salas)
+disciplinas = carregar(listar_disciplinas)
 if salas.empty:
-    st.warning("Cadastre salas antes de fazer uma reserva.")
+    st.warning("Ainda não há salas cadastradas. Peça ao administrador para cadastrá-las.")
+    st.stop()
+if disciplinas.empty:
+    st.warning("Ainda não há disciplinas ativas cadastradas. "
+               + ("Cadastre na página Disciplinas." if somente_admin() else "Peça ao administrador para cadastrá-las."))
     st.stop()
 
 # Sem st.form: assim a lista de salas recomendadas se atualiza na hora
 # quando o usuário muda a quantidade de alunos ou o tipo de aula.
 c1, c2 = st.columns(2)
 with c1:
-    professor = st.text_input("Professor / solicitante", value=usuario_atual()["nome"])
-    disciplina = st.text_input("Disciplina")
+    if somente_admin():
+        professor = st.text_input("Professor / solicitante", value=usuario["nome"])
+    else:                       # professor só reserva em nome próprio
+        professor = usuario["nome"]
+        st.text_input("Professor / solicitante", value=professor, disabled=True)
+    ids_disciplinas = disciplinas["id"].tolist()
+    rotulos_disciplinas = {r["id"]: rotulo_disciplina(r) for _, r in disciplinas.iterrows()}
+    disciplina_id = st.selectbox("Disciplina", ids_disciplinas, format_func=lambda i: rotulos_disciplinas[i])
     tipo = st.selectbox("Tipo de aula", ["Teórica", "Laboratório de Informática", "Auditório", "Prática"])
     alunos = st.number_input("Quantidade de alunos", min_value=1, max_value=500, value=32, step=1)
 with c2:
-    data = st.date_input("Data", value=date.today())
+    data = st.date_input("Data", value=tempo.hoje())
     inicio = st.time_input("Horário inicial", value=time(14, 0))
     fim = st.time_input("Horário final", value=time(16, 0))
 
@@ -64,17 +78,22 @@ justificativa = st.text_area(
 )
 
 if st.button("Solicitar reserva", type="primary"):
+    agora = tempo.agora()
     erros = []
     if not professor.strip():
         erros.append("Informe o professor ou solicitante.")
-    if not disciplina.strip():
-        erros.append("Informe a disciplina.")
     if fim <= inicio:
         erros.append("O horário final deve ser posterior ao horário inicial.")
-    if data < date.today():
+    if data < agora.date():
         erros.append("A data da reserva não pode estar no passado.")
+    elif data == agora.date() and inicio <= agora.time():
+        erros.append("O horário inicial de hoje já passou.")
     if excepcional and not justificativa.strip():
         erros.append("Informe a justificativa da reserva excepcional.")
+
+    escolhida_disc = disciplinas[disciplinas["id"] == disciplina_id]
+    if escolhida_disc.empty:
+        erros.append("Disciplina inválida ou inativa. Atualize a página e escolha outra.")
 
     if erros:
         for erro in erros:
@@ -83,7 +102,8 @@ if st.button("Solicitar reserva", type="primary"):
         try:
             novo_id = criar({
                 "professor": professor.strip(),
-                "disciplina": disciplina.strip(),
+                "disciplina": str(escolhida_disc.iloc[0]["nome"]),
+                "disciplina_id": disciplina_id,
                 "sala": sala,
                 "tipo_aula": tipo,
                 "alunos": int(alunos),
@@ -92,7 +112,7 @@ if st.button("Solicitar reserva", type="primary"):
                 "fim": fim.strftime("%H:%M"),
                 "status": "Pendente",
                 "justificativa": justificativa.strip(),
-                "criado_por": usuario_atual()["email"],
+                "criado_por": usuario["email"],
             })
             st.success(f"Reserva enviada para análise com sucesso! ID: {novo_id}")
         except ConflitoHorario as e:

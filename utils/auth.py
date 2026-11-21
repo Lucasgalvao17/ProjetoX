@@ -3,7 +3,7 @@ import re
 import streamlit as st
 
 from controllers import usuario_controller as uc
-from utils.firestore_client import DocumentoJaExiste
+from utils.firestore_client import DocumentoJaExiste, FirestoreError
 
 
 def login(email, senha):
@@ -19,6 +19,10 @@ def login(email, senha):
         "id": usuario["id"], "nome": usuario.get("nome", ""),
         "email": usuario.get("email", ""), "perfil": usuario.get("perfil", "Professor"),
     }
+    try:
+        uc.registrar_login(usuario["id"])
+    except FirestoreError:
+        pass                                        # o registro do último acesso não pode impedir o login
     return True
 
 
@@ -27,8 +31,8 @@ def cadastrar_usuario(nome, email, senha, perfil="Professor"):
         return False, "Preencha todos os campos."
     if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email.strip()):
         return False, "Informe um e-mail válido."
-    if len(senha) < 6:
-        return False, "A senha deve ter pelo menos 6 caracteres."
+    if len(senha) < uc.MIN_SENHA:
+        return False, f"A senha deve ter pelo menos {uc.MIN_SENHA} caracteres."
     if perfil not in uc.PERFIS:
         return False, "Perfil inválido."
     try:
@@ -63,3 +67,28 @@ def logout():
 def somente_admin():
     user = usuario_atual()
     return bool(user and user["perfil"] == "Administrador")
+
+
+def revalidar_sessao():
+    """Relê o usuário no Firestore a cada página: se o admin o desativou ou mudou o perfil,
+    isso vale na hora (sem esperar o usuário sair e entrar). Retorna False se a sessão caiu."""
+    atual = usuario_atual()
+    if not atual:
+        return False
+    try:
+        doc = uc.obter(atual["id"])
+    except FirestoreError:
+        return True                                 # Firestore fora: mantém a sessão; a página mostra o erro
+    if doc is None or str(doc.get("ativo")) != "Sim":
+        logout()
+        return False
+    st.session_state["usuario"] = {**atual, "nome": doc.get("nome", atual["nome"]),
+                                   "perfil": doc.get("perfil", atual["perfil"])}
+    return True
+
+
+def exigir_admin():
+    """Para páginas restritas: quem não é administrador vê o aviso e a página para."""
+    if not somente_admin():
+        st.error("Esta página é restrita ao administrador.")
+        st.stop()

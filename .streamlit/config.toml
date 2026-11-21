@@ -1,0 +1,3 @@
+[client]
+# O menu lateral é montado em views/layout.py conforme o perfil (Professor x Administrador).
+showSidebarNavigation = false

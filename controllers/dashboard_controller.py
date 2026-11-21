@@ -1,12 +1,10 @@
 """Dashboard — usa EXATAMENTE os mesmos controllers/Firestore das abas Salas e Agendamentos."""
-from datetime import date
-
-import pandas as pd
 import streamlit as st
 
 from controllers import agendamento_controller, sala_controller, usuario_controller
 from utils import firestore_client as fs
-from utils.auth import somente_admin
+from utils import tempo
+from utils.auth import somente_admin, usuario_atual
 from views.layout import carregar
 
 
@@ -17,7 +15,7 @@ def obter_dados() -> dict:
     usuarios = usuario_controller.listar()
 
     status = reservas["status"]
-    hoje = str(date.today())
+    hoje = str(tempo.hoje())
     futuras = reservas[status.isin(agendamento_controller.STATUS_ATIVOS) & (reservas["data"].astype(str) >= hoje)]
 
     visao = salas.copy()
@@ -25,7 +23,8 @@ def obter_dados() -> dict:
         futuras["sala"].astype(str).value_counts()
     ).fillna(0).astype(int)
 
-    recentes = reservas.sort_values("criado_em", ascending=False).head(10)
+    # reprovadas continuam no Firestore (histórico), mas não poluem a visão principal
+    recentes = reservas[status != "Reprovada"].sort_values("criado_em", ascending=False).head(10)
 
     nomes_salas = set(salas["sala"].astype(str))
     orfas = reservas[~reservas["sala"].astype(str).isin(nomes_salas)]
@@ -48,6 +47,58 @@ def obter_dados() -> dict:
 
 
 def dashboard():
+    """Admin: painel completo. Professor: início enxuto com as próprias reservas."""
+    if somente_admin():
+        dashboard_admin()
+    else:
+        dashboard_professor()
+
+
+def obter_dados_professor(usuario: dict) -> dict:
+    minhas = agendamento_controller.classificar(
+        agendamento_controller.do_usuario(agendamento_controller.listar(), usuario)
+    )
+    proximas = minhas[minhas["aba"] == "Aprovados"].sort_values(["data", "inicio"]).head(5)
+    pendentes = minhas[minhas["aba"] == "Pendentes"].sort_values(["data", "inicio"])
+    return {
+        "minhas": minhas,
+        "proximas": proximas,
+        "pendentes": pendentes,
+        "metricas": {
+            "Pendentes": len(pendentes),
+            "Aprovadas (próximas)": int((minhas["aba"] == "Aprovados").sum()),
+            "Realizadas": int((minhas["situacao"] == "Concluída").sum()),
+        },
+    }
+
+
+def dashboard_professor():
+    usuario = usuario_atual()
+    st.title(f"Olá, {usuario['nome'].split()[0] if usuario['nome'].strip() else 'professor(a)'}!")
+    st.caption("Solicite salas, acompanhe suas reservas e consulte a disponibilidade.")
+    c1, c2, c3 = st.columns(3)
+    c1.page_link("pages/2_Nova_Reserva.py", label="Solicitar reserva", icon="📝")
+    c2.page_link("pages/7_Minhas_Reservas.py", label="Minhas reservas", icon="📅")
+    c3.page_link("pages/8_Disponibilidade.py", label="Disponibilidade das salas", icon="🔎")
+    st.divider()
+
+    d = carregar(obter_dados_professor, usuario)
+    cols = st.columns(len(d["metricas"]))
+    for col, (rotulo, valor) in zip(cols, d["metricas"].items()):
+        col.metric(rotulo, valor)
+
+    cols_tab = ["data", "inicio", "fim", "sala", "disciplina", "situacao"]
+    st.subheader("Próximas reservas aprovadas")
+    if d["proximas"].empty:
+        st.info("Você não tem reservas aprovadas por vir.")
+    else:
+        st.dataframe(d["proximas"][cols_tab], use_container_width=True, hide_index=True)
+    if not d["pendentes"].empty:
+        st.subheader("Aguardando aprovação")
+        st.dataframe(d["pendentes"][cols_tab], use_container_width=True, hide_index=True)
+
+
+def dashboard_admin():
     st.title("ATILA")
     st.caption("Sistema de Gestão e Agendamento de Salas")
     st.divider()
