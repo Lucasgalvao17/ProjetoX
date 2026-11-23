@@ -42,6 +42,7 @@ class _Sidebar(_Ctx):
 
 secrets = {}
 session_state = {}
+query_params = {}   # st.query_params (o tema fica em ?tema=)
 sidebar = _Sidebar()
 SAIDA = []          # (tipo, texto) de tudo que a página "desenhou"
 DADOS = {}          # DataFrames exibidos por st.dataframe, na ordem

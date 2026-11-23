@@ -1,13 +1,16 @@
 import streamlit as st
 from utils.auth import login, cadastrar_usuario, usuario_logado
 from utils.firestore_client import FirestoreError
-from views.layout import configurar_pagina
+from views.layout import botao_tema, configurar_pagina
 from views.tema import html_hero_login
 
 configurar_pagina(login=True)
 
 if usuario_logado():
     st.switch_page("app.py")
+
+_, col_tema = st.columns([8, 2])
+botao_tema(col_tema)
 
 col_hero, col_form = st.columns([5, 6], gap="large")
 

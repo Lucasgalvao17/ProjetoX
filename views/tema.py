@@ -1,9 +1,12 @@
 """Identidade visual do ÁTILA, inspirada no portal da UNISAPIENS.
 
-Para trocar uma cor do sistema inteiro, mude só o bloco :root logo abaixo (e, se for o caso, a
-primaryColor em .streamlit/config.toml). Este arquivo não importa o Streamlit.
+Para trocar uma cor do sistema inteiro, mude só o bloco :root logo abaixo (tema claro) e o bloco
+:root de CSS_ESCURO (tema escuro) e, se for o caso, a primaryColor em .streamlit/config.toml.
+Este arquivo não importa o Streamlit: quem escolhe o tema é views/layout.py (botão "Modo escuro").
 """
 from html import escape
+
+MODOS = ("claro", "escuro")
 
 # Texto sempre em roxo escuro sobre o laranja (contraste 6,5:1). O portal original usa branco
 # sobre laranja (2,4:1), que cansa a leitura.
@@ -18,6 +21,33 @@ CSS = """
   --superficie: #FFFFFF;
   --borda: #E1E3EE;
   --texto-suave: #5B5F73;
+
+  /* Papéis de cor: o tema escuro (CSS_ESCURO) troca só estes valores. */
+  --fundo: #F3F4F9;              /* espelha backgroundColor do config.toml */
+  --campo: #FFFFFF;
+  --texto: #1E1B2E;              /* espelha textColor do config.toml */
+  --titulo: var(--roxo-900);
+  --foco: var(--roxo-600);
+  --foco-sombra: rgba(91, 45, 145, .25);
+  --sombra: rgba(45, 22, 89, .12);
+  --btn-hover: var(--roxo-900);
+  --menu-fundo: var(--laranja);
+  --menu-texto: var(--roxo-900);
+  --menu-divisor: rgba(45, 22, 89, .28);
+  --menu-hover: rgba(45, 22, 89, .12);
+  --menu-cartao: rgba(255, 255, 255, .45);
+  --menu-ativo-fundo: var(--roxo-900);
+  --menu-ativo-texto: #FFFFFF;
+  --marca-fundo: var(--roxo-900);
+  --marca-texto: var(--laranja);
+  --avatar-fundo: var(--roxo-900);
+  --avatar-texto: #FFFFFF;
+  --hero-fundo: var(--laranja);
+  --hero-texto: var(--roxo-900);
+  --hero-logo-fundo: var(--roxo-900);
+  --hero-logo-texto: var(--laranja);
+  --hero-traco: var(--roxo-900);
+
   --fonte-corpo: 'Nunito Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --fonte-titulo: 'Sora', 'Nunito Sans', 'Segoe UI', system-ui, sans-serif;
 }
@@ -31,7 +61,7 @@ CSS = """
 .stApp [data-testid="stIconMaterial"] { font-family: "Material Symbols Rounded" !important; }
 .stApp h1, .stApp h2, .stApp h3, .stApp [data-testid="stMetricValue"] {
   font-family: var(--fonte-titulo) !important;
-  color: var(--roxo-900);
+  color: var(--titulo);
 }
 
 /* ---------- Página ---------- */
@@ -65,11 +95,11 @@ CSS = """
 
 /* ---------- Menu lateral: laranja da faculdade, com texto roxo legível ---------- */
 [data-testid="stSidebar"], [data-testid="stSidebarContent"] {
-  background: var(--laranja) !important;
+  background: var(--menu-fundo) !important;
 }
 [data-testid="stSidebarNav"] { display: none; }  /* menu automático: usamos o menu por perfil (views/layout.py) */
-[data-testid="stSidebar"] * { color: var(--roxo-900) !important; }
-[data-testid="stSidebar"] hr { border-color: rgba(45, 22, 89, .28) !important; }
+[data-testid="stSidebar"] * { color: var(--menu-texto) !important; }
+[data-testid="stSidebar"] hr { border-color: var(--menu-divisor) !important; }
 
 [data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] {
   border-radius: 10px;
@@ -79,14 +109,14 @@ CSS = """
 }
 [data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] p { font-weight: 600; }
 [data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover {
-  background: rgba(45, 22, 89, .12);
+  background: var(--menu-hover);
 }
 [data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"][aria-current="page"] {
-  background: var(--roxo-900);
+  background: var(--menu-ativo-fundo);
 }
 [data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"][aria-current="page"],
 [data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"][aria-current="page"] * {
-  color: #FFFFFF !important;
+  color: var(--menu-ativo-texto) !important;
 }
 
 /* Marca (topo do menu) */
@@ -95,8 +125,8 @@ CSS = """
   width: 2.6rem; height: 2.6rem; flex: none;
   display: grid; place-items: center;
   border-radius: 12px;
-  background: var(--roxo-900);
-  color: var(--laranja) !important;
+  background: var(--marca-fundo);
+  color: var(--marca-texto) !important;
   font: 800 1.35rem/1 var(--fonte-titulo);
 }
 .atila-marca__nome { font: 800 1.3rem/1.1 var(--fonte-titulo); }
@@ -108,14 +138,14 @@ CSS = """
   padding: .6rem .7rem;
   margin: .25rem 0 .75rem;
   border-radius: 12px;
-  background: rgba(255, 255, 255, .45);
+  background: var(--menu-cartao);
 }
 [data-testid="stSidebar"] .atila-usuario__avatar {
   width: 2.3rem; height: 2.3rem; flex: none;
   display: grid; place-items: center;
   border-radius: 50%;
-  background: var(--roxo-900);
-  color: #FFFFFF !important;
+  background: var(--avatar-fundo);
+  color: var(--avatar-texto) !important;
   font: 700 .85rem/1 var(--fonte-titulo);
 }
 .atila-usuario__nome { font-weight: 700; font-size: .92rem; line-height: 1.2; overflow-wrap: anywhere; }
@@ -124,14 +154,14 @@ CSS = """
 /* Botão "Sair" do menu */
 [data-testid="stSidebar"] .stButton button {
   background: transparent;
-  border: 2px solid var(--roxo-900);
+  border: 2px solid var(--menu-texto);
   border-radius: 10px;
   font-weight: 700;
 }
 [data-testid="stSidebar"] .stButton button:hover,
 [data-testid="stSidebar"] .stButton button:hover * {
-  background: var(--roxo-900);
-  color: #FFFFFF !important;
+  background: var(--menu-ativo-fundo);
+  color: var(--menu-ativo-texto) !important;
 }
 
 /* ---------- Indicadores ---------- */
@@ -148,7 +178,7 @@ CSS = """
 /* ---------- Abas ---------- */
 [data-baseweb="tab-list"] { gap: .25rem; }
 button[data-baseweb="tab"] { font-weight: 600; padding: .6rem 1rem; }
-button[data-baseweb="tab"][aria-selected="true"] { color: var(--roxo-900); }
+button[data-baseweb="tab"][aria-selected="true"] { color: var(--titulo); }
 [data-baseweb="tab-highlight"] { background-color: var(--laranja) !important; height: 3px !important; }
 [data-baseweb="tab-border"] { background-color: var(--borda) !important; }
 
@@ -160,18 +190,18 @@ button[data-baseweb="tab"][aria-selected="true"] { color: var(--roxo-900); }
 .stApp button[kind="primary"]:hover,
 .stApp [data-testid="stBaseButton-primary"]:hover,
 .stApp [data-testid="stBaseButton-primaryFormSubmit"]:hover {
-  background-color: var(--roxo-900);
-  border-color: var(--roxo-900);
+  background-color: var(--btn-hover);
+  border-color: var(--btn-hover);
 }
 .stApp [data-baseweb="input"], .stApp [data-baseweb="textarea"], .stApp [data-baseweb="select"] > div {
   border-radius: 10px;
 }
 .stApp [data-baseweb="input"]:focus-within, .stApp [data-baseweb="textarea"]:focus-within {
-  border-color: var(--roxo-600) !important;
-  box-shadow: 0 0 0 2px rgba(91, 45, 145, .25);
+  border-color: var(--foco) !important;
+  box-shadow: 0 0 0 2px var(--foco-sombra);
 }
 .stApp a:focus-visible, .stApp button:focus-visible {
-  outline: 3px solid var(--roxo-600);
+  outline: 3px solid var(--foco);
   outline-offset: 2px;
 }
 
@@ -194,16 +224,135 @@ button[data-baseweb="tab"][aria-selected="true"] { color: var(--roxo-900); }
   padding: .9rem 1rem;
   transition: border-color .15s ease, box-shadow .15s ease;
 }
-[data-testid="stMain"] a[data-testid="stPageLink-NavLink"] p { font-weight: 700; color: var(--roxo-900); }
+[data-testid="stMain"] a[data-testid="stPageLink-NavLink"] p { font-weight: 700; color: var(--titulo); }
 [data-testid="stMain"] a[data-testid="stPageLink-NavLink"]:hover {
-  border-color: var(--roxo-600);
-  box-shadow: 0 2px 10px rgba(45, 22, 89, .12);
+  border-color: var(--foco);
+  box-shadow: 0 2px 10px var(--sombra);
 }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
 """
+
+# Tema escuro: vem DEPOIS do CSS claro (mesma especificidade, o último ganha). Troca os papéis de cor
+# e repinta os componentes nativos do Streamlit, que continuam com o tema claro do config.toml.
+CSS_ESCURO = """
+:root {
+  color-scheme: dark;            /* barras de rolagem e controles nativos escuros */
+  --superficie: #1F1A2E;
+  --fundo: #15111F;
+  --campo: #292238;
+  --borda: #3A3252;
+  --borda-tabela: #C9CFE0;       /* a tabela é invertida por filtro (abaixo): esta cor sai escura */
+  --texto: #ECE9F5;
+  --texto-suave: #B6B0CC;
+  --titulo: #FFFFFF;
+  --verde-agua: #3BB5C6;
+  --foco: #FFB347;
+  --foco-sombra: rgba(255, 179, 71, .30);
+  --sombra: rgba(0, 0, 0, .55);
+  --btn-hover: #FFA826;
+  --menu-fundo: var(--roxo-900);
+  --menu-texto: #F4F1FF;
+  --menu-divisor: rgba(255, 255, 255, .22);
+  --menu-hover: rgba(255, 255, 255, .10);
+  --menu-cartao: rgba(255, 255, 255, .08);
+  --menu-ativo-fundo: var(--laranja);
+  --menu-ativo-texto: var(--roxo-900);
+  --marca-fundo: var(--laranja);
+  --marca-texto: var(--roxo-900);
+  --avatar-fundo: var(--laranja);
+  --avatar-texto: var(--roxo-900);
+  --hero-fundo: var(--roxo-900);
+  --hero-texto: #F4F1FF;
+  --hero-logo-fundo: var(--laranja);
+  --hero-logo-texto: var(--roxo-900);
+  --hero-traco: var(--laranja);
+}
+
+/* ---------- Página e cabeçalho ---------- */
+.stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stHeader"] {
+  background-color: var(--fundo) !important;
+}
+[data-testid="stHeader"] * { color: var(--texto) !important; }
+
+/* ---------- Texto ---------- */
+.stApp p, .stApp li, .stApp label, .stApp small, .stApp summary, .stApp th, .stApp td,
+.stApp h4, .stApp h5, .stApp h6 { color: var(--texto); }
+.stApp h1, .stApp h2, .stApp h3, .stApp h1 *, .stApp h2 *, .stApp h3 *,
+.stApp [data-testid="stMetricValue"], .stApp [data-testid="stMetricValue"] * { color: var(--titulo) !important; }
+.stApp [data-testid="stCaptionContainer"] p,
+.stApp [data-testid="stMetricLabel"], .stApp [data-testid="stMetricLabel"] * { color: var(--texto-suave) !important; }
+.stApp button[data-baseweb="tab"] p { color: var(--texto-suave); }
+.stApp button[data-baseweb="tab"][aria-selected="true"] p { color: var(--titulo); }
+.stApp hr { border-color: var(--borda); }
+
+/* ---------- Campos ---------- */
+.stApp [data-baseweb="input"], .stApp [data-baseweb="base-input"], .stApp [data-baseweb="textarea"],
+.stApp [data-baseweb="select"] > div,
+[data-baseweb="input"] input, [data-baseweb="base-input"] input, .stApp textarea {
+  background-color: var(--campo) !important;
+  color: var(--texto) !important;
+}
+.stApp [data-baseweb="input"], .stApp [data-baseweb="textarea"], .stApp [data-baseweb="select"] > div {
+  border-color: var(--borda);
+}
+[data-baseweb="select"] div, [data-baseweb="select"] span { color: var(--texto); }
+[data-baseweb="select"] svg, [data-baseweb="input"] svg { fill: var(--texto-suave); }
+.stApp ::placeholder { color: var(--texto-suave) !important; -webkit-text-fill-color: var(--texto-suave) !important; opacity: 1; }
+
+/* ---------- Listas suspensas, calendário, menu ⋮ e janelas (ficam fora do .stApp) ---------- */
+[data-baseweb="popover"] > div, [data-baseweb="popover"] [data-baseweb="menu"], [data-baseweb="popover"] ul,
+[data-baseweb="calendar"] {
+  background-color: var(--superficie) !important;
+  color: var(--texto) !important;
+}
+[data-baseweb="popover"] li, [data-baseweb="popover"] li *, [data-baseweb="calendar"] * { color: var(--texto) !important; }
+[data-baseweb="popover"] li:hover, [data-baseweb="popover"] li[aria-selected="true"] {
+  background-color: var(--borda) !important;
+}
+[data-testid="stDialog"] [role="dialog"] { background-color: var(--superficie); }
+
+/* ---------- Botões ---------- */
+.stApp [data-testid="stBaseButton-primary"], .stApp [data-testid="stBaseButton-primaryFormSubmit"],
+.stApp button[kind="primary"], .stApp button[kind="primaryFormSubmit"] {
+  background-color: var(--laranja) !important;
+  border-color: var(--laranja) !important;
+}
+.stApp [data-testid="stBaseButton-primary"]:hover, .stApp [data-testid="stBaseButton-primaryFormSubmit"]:hover,
+.stApp button[kind="primary"]:hover, .stApp button[kind="primaryFormSubmit"]:hover {
+  background-color: var(--btn-hover) !important;
+  border-color: var(--btn-hover) !important;
+}
+.stApp [data-testid="stBaseButton-primary"] *, .stApp [data-testid="stBaseButton-primaryFormSubmit"] *,
+.stApp button[kind="primary"] *, .stApp button[kind="primaryFormSubmit"] * { color: var(--roxo-900) !important; }
+
+.stApp [data-testid="stBaseButton-secondary"], .stApp [data-testid="stBaseButton-secondaryFormSubmit"],
+.stApp button[kind="secondary"], .stApp button[kind="secondaryFormSubmit"] {
+  background-color: var(--superficie);
+  border-color: var(--borda);
+}
+.stApp [data-testid="stBaseButton-secondary"]:hover, .stApp [data-testid="stBaseButton-secondaryFormSubmit"]:hover,
+.stApp button[kind="secondary"]:hover, .stApp button[kind="secondaryFormSubmit"]:hover {
+  border-color: var(--laranja);
+}
+
+/* ---------- Superfícies, tabelas e avisos ---------- */
+[data-testid="stVerticalBlockBorderWrapper"] { border-color: var(--borda); }
+[data-testid="stExpander"] details { background-color: var(--superficie); border-color: var(--borda); }
+.stApp [data-testid="stAlert"] * { color: var(--texto) !important; }
+
+/* A tabela é um canvas (o CSS não alcança): inverte as cores por filtro e gira o matiz de volta. */
+[data-testid="stDataFrame"] {
+  border-color: var(--borda-tabela);
+  filter: invert(.88) hue-rotate(180deg);
+}
+"""
+
+def css_tema(modo: str) -> str:
+    """CSS completo do tema pedido ("claro" ou "escuro"); qualquer outro valor cai no claro."""
+    return CSS + CSS_ESCURO if modo == "escuro" else CSS
 
 # Tela de entrada: sem menu lateral e com o painel laranja de boas-vindas.
 CSS_LOGIN = """
@@ -216,8 +365,8 @@ CSS_LOGIN = """
   min-height: 27rem;
   padding: 2.5rem 2.25rem;
   border-radius: 16px;
-  background: var(--laranja);
-  color: var(--roxo-900);
+  background: var(--hero-fundo);
+  color: var(--hero-texto);
   display: flex;
   flex-direction: column;
   gap: 1.1rem;
@@ -226,8 +375,8 @@ CSS_LOGIN = """
   width: 3.2rem; height: 3.2rem;
   display: grid; place-items: center;
   border-radius: 14px;
-  background: var(--roxo-900);
-  color: var(--laranja);
+  background: var(--hero-logo-fundo);
+  color: var(--hero-logo-texto);
   font: 800 1.7rem/1 var(--fonte-titulo);
 }
 .atila-hero__titulo { font: 800 2.6rem/1.05 var(--fonte-titulo); }
@@ -235,7 +384,7 @@ CSS_LOGIN = """
 .atila-hero__lista { margin: auto 0 0; padding: 0; list-style: none; display: grid; gap: .6rem; }
 .atila-hero__lista li {
   padding-left: 1.1rem;
-  border-left: 4px solid var(--roxo-900);
+  border-left: 4px solid var(--hero-traco);
   font-weight: 700;
   line-height: 1.3;
 }

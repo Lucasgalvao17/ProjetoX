@@ -1,7 +1,7 @@
 import streamlit as st
 from utils.auth import logout, revalidar_sessao, somente_admin, usuario_atual
 from utils.firestore_client import FirestoreError
-from views.tema import CSS, CSS_LOGIN, html_marca, html_usuario
+from views.tema import CSS_LOGIN, MODOS, css_tema, html_marca, html_usuario
 
 # (arquivo, rótulo, ícone) — quem vê o quê. O bloqueio de verdade está em cada página (exigir_admin).
 MENU_ADMIN = [
@@ -23,6 +23,31 @@ MENU_PROFESSOR = [
 ]
 
 
+def modo_tema() -> str:
+    """Tema da sessão ("claro" ou "escuro"). Vale para todas as páginas; o ?tema= da URL (que
+    configurar_pagina mantém atualizado) faz a escolha sobreviver a F5 e a links favoritos."""
+    if st.session_state.get("_tema") not in MODOS:
+        pedido = st.query_params.get("tema")
+        st.session_state["_tema"] = pedido if pedido in MODOS else "claro"
+    return st.session_state["_tema"]
+
+
+def _alternar_tema():
+    st.session_state["_tema"] = "claro" if modo_tema() == "escuro" else "escuro"
+
+
+def botao_tema(onde=st):
+    """Botão claro/escuro. `onde` é o lugar onde ele aparece: st.sidebar, uma coluna, etc."""
+    escuro = modo_tema() == "escuro"
+    onde.button(
+        "Modo claro" if escuro else "Modo escuro",
+        icon=":material/light_mode:" if escuro else ":material/dark_mode:",
+        key="btn_tema",
+        on_click=_alternar_tema,
+        use_container_width=True,
+    )
+
+
 def configurar_pagina(login: bool = False):
     st.set_page_config(
         page_title="ATILA | Gestão de Salas",
@@ -30,7 +55,10 @@ def configurar_pagina(login: bool = False):
         layout="wide",
         initial_sidebar_state="expanded"
     )
-    st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)  # identidade visual: views/tema.py
+    modo = modo_tema()
+    if st.query_params.get("tema") != modo:
+        st.query_params["tema"] = modo
+    st.markdown(f"<style>{css_tema(modo)}</style>", unsafe_allow_html=True)  # identidade visual: views/tema.py
     if login:
         st.markdown(f"<style>{CSS_LOGIN}</style>", unsafe_allow_html=True)
 
@@ -57,6 +85,7 @@ def menu_lateral():
     st.sidebar.divider()
     if user:
         st.sidebar.markdown(html_usuario(user["nome"], user["perfil"]), unsafe_allow_html=True)
+    botao_tema(st.sidebar)
     if st.sidebar.button("Sair", use_container_width=True):
         logout()
         st.switch_page("pages/0_Login.py")
