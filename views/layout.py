@@ -1,6 +1,7 @@
 import streamlit as st
 from utils.auth import logout, revalidar_sessao, somente_admin, usuario_atual
 from utils.firestore_client import FirestoreError
+from views.tema import CSS, CSS_LOGIN, html_marca, html_usuario
 
 # (arquivo, rótulo, ícone) — quem vê o quê. O bloqueio de verdade está em cada página (exigir_admin).
 MENU_ADMIN = [
@@ -22,24 +23,16 @@ MENU_PROFESSOR = [
 ]
 
 
-def configurar_pagina():
+def configurar_pagina(login: bool = False):
     st.set_page_config(
         page_title="ATILA | Gestão de Salas",
         page_icon="🏫",
         layout="wide",
         initial_sidebar_state="expanded"
     )
-    st.markdown("""
-    <style>
-    .block-container {max-width: 1450px; padding-top: 1.5rem;}
-    [data-testid="stSidebar"] {background:#20232d;}
-    [data-testid="stSidebar"] * {color:#fff !important;}
-    [data-testid="stSidebarNav"] {display:none;}  /* menu automático: usamos o menu por perfil */
-    div[data-testid="stMetric"] {border:1px solid #e4e8f0; border-radius:12px; padding:10px;}
-    .atila-card {padding:18px;border:1px solid #e4e8f0;border-radius:12px;background:white;}
-    .status {padding:5px 10px;border-radius:20px;}
-    </style>
-    """, unsafe_allow_html=True)
+    st.markdown(f"<style>{CSS}</style>", unsafe_allow_html=True)  # identidade visual: views/tema.py
+    if login:
+        st.markdown(f"<style>{CSS_LOGIN}</style>", unsafe_allow_html=True)
 
 
 def avisar(tipo: str, texto: str):
@@ -57,15 +50,13 @@ def menu_lateral():
         st.warning("Sua sessão não é mais válida (usuário desativado ou removido). Entre novamente.")
         st.switch_page("pages/0_Login.py")
     user = usuario_atual()
-    st.sidebar.markdown("# ATILA")
-    st.sidebar.caption("Gestão e Agendamento de Salas")
+    st.sidebar.markdown(html_marca(), unsafe_allow_html=True)
     st.sidebar.divider()
     for arquivo, rotulo, icone in (MENU_ADMIN if somente_admin() else MENU_PROFESSOR):
         st.sidebar.page_link(arquivo, label=rotulo, icon=icone)
     st.sidebar.divider()
     if user:
-        st.sidebar.caption(f"Logado como: {user['nome']}")
-        st.sidebar.caption(f"Perfil: {user['perfil']}")
+        st.sidebar.markdown(html_usuario(user["nome"], user["perfil"]), unsafe_allow_html=True)
     if st.sidebar.button("Sair", use_container_width=True):
         logout()
         st.switch_page("pages/0_Login.py")

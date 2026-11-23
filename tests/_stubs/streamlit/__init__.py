@@ -98,6 +98,7 @@ def button(rotulo, *a, **k): return bool(_entrada(rotulo, False, k.get("key")))
 def form_submit_button(rotulo, *a, **k): return bool(_entrada(rotulo, False, k.get("key")))
 def page_link(pagina, *a, **k): SAIDA.append(("link", pagina))
 def form(*a, **k): return _Ctx()
+def container(*a, **k): return _Ctx()
 def tabs(rotulos):
     for r in rotulos: SAIDA.append(("tab", str(r)))
     return [_Ctx() for _ in rotulos]

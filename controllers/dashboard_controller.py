@@ -99,13 +99,10 @@ def dashboard_professor():
 
 
 def dashboard_admin():
-    st.title("ATILA")
-    st.caption("Sistema de Gestão e Agendamento de Salas")
-    st.divider()
-
-    topo1, topo2 = st.columns([5, 1])
-    topo1.header("Dashboard")
-    if topo2.button("🔄 Atualizar", use_container_width=True):
+    topo1, topo2 = st.columns([5, 1], vertical_alignment="center")
+    topo1.title("Dashboard")
+    topo1.caption("Visão geral de salas, reservas e usuários.")
+    if topo2.button("Atualizar", icon=":material/refresh:", use_container_width=True):
         st.rerun()
 
     d = carregar(obter_dados)

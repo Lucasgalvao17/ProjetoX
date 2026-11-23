@@ -1,3 +1,12 @@
 [client]
 # O menu lateral é montado em views/layout.py conforme o perfil (Professor x Administrador).
 showSidebarNavigation = false
+
+[theme]
+# Cores base do sistema (a identidade completa está em views/tema.py).
+base = "light"
+primaryColor = "#5B2D91"
+backgroundColor = "#F3F4F9"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#1E1B2E"
+font = "sans serif"
