@@ -47,6 +47,14 @@ CSS = """
   --hero-logo-fundo: var(--roxo-900);
   --hero-logo-texto: var(--laranja);
   --hero-traco: var(--roxo-900);
+  --borda-forte: #AEB3CC;        /* borda bem visível de cartões (ex.: formulário de login) */
+
+  /* Avisos (st.info / success / warning / error): fundo, borda e texto definidos aqui, com contraste
+     mínimo de 7:1 (texto x fundo), para não depender do tema claro nativo do Streamlit. */
+  --info-fundo: #E3F4F7;    --info-borda: #1F8A99;    --info-texto: #0B3C45;
+  --ok-fundo: #E4F5EA;      --ok-borda: #2E9E5B;      --ok-texto: #0F3D22;
+  --aviso-fundo: #FFF3DC;   --aviso-borda: #D98A00;   --aviso-texto: #4A3000;
+  --erro-fundo: #FDE8EC;    --erro-borda: #D93A57;    --erro-texto: #5C0F1F;
 
   --fonte-corpo: 'Nunito Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --fonte-titulo: 'Sora', 'Nunito Sans', 'Segoe UI', system-ui, sans-serif;
@@ -212,7 +220,30 @@ button[data-baseweb="tab"][aria-selected="true"] { color: var(--titulo); }
   overflow: hidden;
   background: var(--superficie);
 }
-[data-testid="stAlert"] { border-radius: 10px; }
+
+/* Avisos: o Streamlit pinta o fundo com o tema claro nativo (config.toml), então no modo escuro ficava
+   fundo claro + texto claro. Aqui fundo, borda e texto vêm sempre do mesmo par de variáveis. */
+.stApp [data-testid="stAlert"] {
+  --a-fundo: var(--info-fundo); --a-borda: var(--info-borda); --a-texto: var(--info-texto);
+  background: var(--a-fundo) !important;
+  border: 1px solid var(--a-borda) !important;
+  border-left-width: 5px !important;
+  border-radius: 10px;
+}
+.stApp [data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"]) {
+  --a-fundo: var(--ok-fundo); --a-borda: var(--ok-borda); --a-texto: var(--ok-texto);
+}
+.stApp [data-testid="stAlert"]:has([data-testid="stAlertContentWarning"]) {
+  --a-fundo: var(--aviso-fundo); --a-borda: var(--aviso-borda); --a-texto: var(--aviso-texto);
+}
+.stApp [data-testid="stAlert"]:has([data-testid="stAlertContentError"]) {
+  --a-fundo: var(--erro-fundo); --a-borda: var(--erro-borda); --a-texto: var(--erro-texto);
+}
+.stApp [data-testid="stAlert"] [data-baseweb="notification"] {
+  background: transparent !important;
+  border: 0 !important;
+}
+.stApp [data-testid="stAlert"], .stApp [data-testid="stAlert"] * { color: var(--a-texto) !important; }
 [data-testid="stVerticalBlockBorderWrapper"] { border-radius: 14px; background: var(--superficie); }
 
 /* Atalhos da tela inicial do professor (links de página fora do menu) */
@@ -269,6 +300,13 @@ CSS_ESCURO = """
   --hero-logo-fundo: var(--laranja);
   --hero-logo-texto: var(--roxo-900);
   --hero-traco: var(--laranja);
+  --borda-forte: #7C6FA8;
+
+  /* Avisos no escuro: fundo escuro tingido, borda viva e texto claro (contraste > 10:1). */
+  --info-fundo: #0F2F38;    --info-borda: #3BB5C6;    --info-texto: #E3F7FA;
+  --ok-fundo: #0F2E1D;      --ok-borda: #3FB67A;      --ok-texto: #E2F8EC;
+  --aviso-fundo: #38290B;   --aviso-borda: #FFB347;   --aviso-texto: #FFF1D6;
+  --erro-fundo: #3B1420;    --erro-borda: #F0627A;    --erro-texto: #FFE3E8;
 }
 
 /* ---------- Página e cabeçalho ---------- */
@@ -341,7 +379,6 @@ CSS_ESCURO = """
 /* ---------- Superfícies, tabelas e avisos ---------- */
 [data-testid="stVerticalBlockBorderWrapper"] { border-color: var(--borda); }
 [data-testid="stExpander"] details { background-color: var(--superficie); border-color: var(--borda); }
-.stApp [data-testid="stAlert"] * { color: var(--texto) !important; }
 
 /* A tabela é um canvas (o CSS não alcança): inverte as cores por filtro e gira o matiz de volta. */
 [data-testid="stDataFrame"] {
@@ -360,6 +397,15 @@ CSS_LOGIN = """
   display: none !important;
 }
 .block-container, [data-testid="stMainBlockContainer"] { max-width: 1080px; padding-top: 4rem; }
+
+/* Cartão do formulário (E-mail ... Entrar): borda visível, fundo próprio e sombra suave. */
+[data-testid="stMain"] [data-testid="stVerticalBlockBorderWrapper"] {
+  background: var(--superficie) !important;
+  border: 1px solid var(--borda-forte) !important;
+  border-radius: 16px;
+  padding: 1.25rem 1.5rem 1.5rem;
+  box-shadow: 0 4px 18px var(--sombra);
+}
 
 .atila-hero {
   min-height: 27rem;
