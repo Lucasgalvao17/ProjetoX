@@ -5,11 +5,16 @@ import unicodedata
 
 import pandas as pd
 
+from controllers import agendamento_controller as ag
 from utils import firestore_client as fs
+from utils import tempo
 from utils.seed import linhas_seed
 from utils.tabelas import para_dataframe
 
 COLECAO = "disciplinas"
+COLECAO_RESERVAS = "reservas"
+COLECAO_CONFIG = "config"
+MARCADOR_SEED = "seed_disciplinas"      # existe = a carga inicial já foi feita (não repetir)
 COLUNAS = ["id", "nome", "codigo", "curso", "ativa"]
 
 
@@ -32,8 +37,19 @@ def rotulo(linha) -> str:
     return f"{linha['codigo']} — {linha['nome']}" if str(linha["codigo"]).strip() else str(linha["nome"])
 
 
+def _marcar_seed() -> None:
+    """Registra que a carga inicial já aconteceu, para que apagar todas as disciplinas
+    não faça as do seed voltarem sozinhas."""
+    try:
+        fs.criar(COLECAO_CONFIG, {"feito_em": tempo.agora().isoformat(timespec="seconds")}, doc_id=MARCADOR_SEED)
+    except fs.DocumentoJaExiste:
+        pass
+
+
 def _garantir_iniciais() -> None:
     if fs.listar(COLECAO, limite=1):
+        return
+    if fs.obter(COLECAO_CONFIG, MARCADOR_SEED) is not None:   # já semeou antes; vazio agora é de propósito
         return
     for linha in linhas_seed("disciplinas.csv"):
         codigo = normalizar_codigo(linha.get("codigo", ""))
@@ -45,6 +61,7 @@ def _garantir_iniciais() -> None:
                      doc_id=id_por_codigo(codigo))
         except fs.DocumentoJaExiste:
             pass
+    _marcar_seed()
 
 
 def listar() -> pd.DataFrame:
@@ -100,3 +117,41 @@ def atualizar(id_disciplina: str, nome: str, curso: str, ativa: str) -> None:
     if erro:
         raise ValueError(erro)
     fs.atualizar(COLECAO, id_disciplina, {"nome": nome, "curso": curso, "ativa": ativa})
+
+
+def reservas_por_vir(disciplina: dict) -> list[dict]:
+    """Reservas Pendentes/Confirmadas dessa disciplina que ainda não terminaram.
+    Reservas novas casam pelo `disciplina_id`; as antigas (sem o campo) pelo nome."""
+    agora = tempo.agora()
+    nome = normalizar(disciplina.get("nome", ""))
+    achadas = []
+    for r in fs.listar(COLECAO_RESERVAS):
+        if r.get("status") not in ag.STATUS_ATIVOS:
+            continue
+        if r.get("disciplina_id"):
+            casa = str(r["disciplina_id"]) == str(disciplina.get("id"))
+        else:
+            casa = normalizar(r.get("disciplina", "")) == nome
+        if casa and not ag.ja_passou(r.get("data"), r.get("fim"), agora):
+            achadas.append(r)
+    return achadas
+
+
+def excluir(id_disciplina: str) -> str:
+    """Exclui a disciplina e devolve o nome dela.
+    Bloqueia se houver reserva pendente/aprovada por vir. Reservas já realizadas, canceladas ou
+    reprovadas guardam o NOME da disciplina, então o histórico continua legível depois da exclusão."""
+    disciplina = fs.obter(COLECAO, id_disciplina)
+    if disciplina is None:
+        raise ValueError("Disciplina não encontrada (talvez já tenha sido excluída).")
+    nome = str(disciplina.get("nome", ""))
+    por_vir = reservas_por_vir(disciplina)
+    if por_vir:
+        raise ValueError(
+            f"A disciplina '{nome}' tem {len(por_vir)} reserva(s) pendente(s)/aprovada(s) ainda por vir. "
+            "Cancele ou reprove essas reservas antes de excluir — ou, se só quiser tirá-la da lista "
+            "da Nova Reserva, desative em 'Editar / ativar'."
+        )
+    _marcar_seed()          # antes de apagar: se for a última, o seed não pode repovoar a lista
+    fs.excluir(COLECAO, id_disciplina)
+    return nome

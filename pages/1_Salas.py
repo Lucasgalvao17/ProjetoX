@@ -108,12 +108,17 @@ with aba_excluir:
     else:
         rotulos = dict(zip(df["id"], df["sala"].astype(str)))
         id_excluir = st.selectbox("Sala para excluir", df["id"].tolist(), format_func=lambda i: rotulos.get(i, i))
-        if st.button("Excluir sala"):
-            try:
-                excluir(id_excluir)
-                avisar("success", "Sala excluída.")
-                st.rerun()
-            except ValueError as e:
-                st.error(str(e))
-            except FirestoreError as e:
-                st.error(f"Falha ao excluir no Firestore: {e}")
+        st.warning("A exclusão é permanente. Salas com reservas pendentes ou aprovadas não podem ser excluídas.")
+        confirmado = st.checkbox("Confirmo que quero excluir esta sala", key=f"sala_del_ok_{id_excluir}")
+        if st.button("Excluir sala", disabled=not confirmado):
+            if not confirmado:
+                st.error("Marque a caixa de confirmação para excluir.")
+            else:
+                try:
+                    excluir(id_excluir)
+                    avisar("success", "Sala excluída.")
+                    st.rerun()
+                except ValueError as e:
+                    st.error(str(e))
+                except FirestoreError as e:
+                    st.error(f"Falha ao excluir no Firestore: {e}")

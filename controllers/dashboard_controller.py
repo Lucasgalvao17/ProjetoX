@@ -23,8 +23,13 @@ def obter_dados() -> dict:
         futuras["sala"].astype(str).value_counts()
     ).fillna(0).astype(int)
 
-    # reprovadas continuam no Firestore (histórico), mas não poluem a visão principal
-    recentes = reservas[status != "Reprovada"].sort_values("criado_em", ascending=False).head(10)
+    # Só aulas de hoje em diante: quando o dia passa, a reserva sai daqui sozinha (é filtro de exibição,
+    # calculado a cada carga — nada é gravado nem apagado; o registro segue em Agendamentos > Histórico).
+    # Reprovadas também ficam de fora da visão principal.
+    recentes = reservas[(status != "Reprovada") & (reservas["data"].astype(str) >= hoje)]
+    recentes = recentes.sort_values("criado_em", ascending=False).head(10)
+
+    pendentes_por_vir = int(((status == "Pendente") & (reservas["data"].astype(str) >= hoje)).sum())
 
     nomes_salas = set(salas["sala"].astype(str))
     orfas = reservas[~reservas["sala"].astype(str).isin(nomes_salas)]
@@ -36,6 +41,7 @@ def obter_dados() -> dict:
         "visao_salas": visao,
         "recentes": recentes,
         "reservas_orfas": orfas,
+        "pendentes_por_vir": pendentes_por_vir,
         "metricas": {
             "Salas": len(salas),
             "Reservas": len(reservas),
@@ -117,6 +123,11 @@ def dashboard_admin():
     for col, (rotulo, valor) in zip(cols, d["metricas"].items()):
         col.metric(rotulo, valor)
 
+    if d["pendentes_por_vir"]:
+        a1, a2 = st.columns([4, 1], vertical_alignment="center")
+        a1.info(f"{d['pendentes_por_vir']} solicitação(ões) de reserva aguardando sua análise.")
+        a2.page_link("pages/3_Agendamentos.py", label="Analisar", icon="📅")
+
     if not d["reservas_orfas"].empty:
         nomes = ", ".join(sorted(set(d["reservas_orfas"]["sala"].astype(str))))
         st.warning(f"Há reservas apontando para salas que não estão cadastradas: {nomes}.")
@@ -129,8 +140,12 @@ def dashboard_admin():
         st.dataframe(mostrar, use_container_width=True, hide_index=True)
 
     st.subheader("Agendamentos recentes")
-    if d["recentes"].empty:
+    st.caption("Mostra só aulas de hoje em diante. Dias que já passaram saem daqui automaticamente "
+               "e ficam no Histórico da página Agendamentos.")
+    if d["reservas"].empty:
         st.info("Nenhum agendamento cadastrado.")
+    elif d["recentes"].empty:
+        st.info("Nenhum agendamento de hoje em diante.")
     else:
         cols_tab = ["id", "professor", "disciplina", "sala", "data", "inicio", "fim", "status"]
         st.dataframe(d["recentes"][cols_tab], use_container_width=True, hide_index=True)

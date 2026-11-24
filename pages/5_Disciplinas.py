@@ -14,10 +14,13 @@ st.caption("Estas disciplinas aparecem como lista de seleção na Nova Reserva. 
            "Cada código e cada nome só podem existir uma vez (evita duplicatas por erro de digitação).")
 
 df = carregar(dc.listar)
-aba_lista, aba_nova, aba_editar = st.tabs([f"Disciplinas ({len(df)})", "Cadastrar disciplina", "Editar / ativar"])
+rotulos = {r["id"]: f"{dc.rotulo(r)}{'' if r['ativa'] == 'Sim' else '  (inativa)'}" for _, r in df.iterrows()}
+aba_lista, aba_nova, aba_editar, aba_excluir = st.tabs(
+    [f"Disciplinas ({len(df)})", "Cadastrar disciplina", "Editar / ativar", "Excluir disciplina"])
 
 with aba_lista:
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    tabela = df.drop(columns="id").rename(columns={"nome": "Nome", "codigo": "Código", "curso": "Curso", "ativa": "Ativa"})
+    st.dataframe(tabela, use_container_width=True, hide_index=True)
 
 with aba_nova:
     with st.form("disciplina"):
@@ -39,7 +42,6 @@ with aba_editar:
     if df.empty:
         st.info("Nenhuma disciplina cadastrada.")
     else:
-        rotulos = {r["id"]: f"{dc.rotulo(r)}{'' if r['ativa'] == 'Sim' else '  (inativa)'}" for _, r in df.iterrows()}
         did = st.selectbox("Disciplina", list(rotulos), format_func=lambda i: rotulos[i], key="disc_edit_sel")
         atual = df[df["id"] == did].iloc[0]
         with st.form(f"form_disc_{did}"):
@@ -57,3 +59,25 @@ with aba_editar:
                     st.error(str(e))
                 except FirestoreError as e:
                     st.error(f"Falha ao salvar no Firestore: {e}")
+
+with aba_excluir:
+    if df.empty:
+        st.info("Nenhuma disciplina cadastrada.")
+    else:
+        id_excluir = st.selectbox("Disciplina para excluir", list(rotulos), format_func=lambda i: rotulos[i], key="disc_del_sel")
+        st.warning("A exclusão é permanente. Reservas já realizadas, canceladas ou reprovadas continuam no histórico "
+                   "com o nome da disciplina. Se você só quer tirá-la da lista da Nova Reserva, use "
+                   "**Editar / ativar** e desative.")
+        confirmado = st.checkbox("Confirmo que quero excluir esta disciplina", key=f"disc_del_ok_{id_excluir}")
+        if st.button("Excluir disciplina", type="primary", disabled=not confirmado, key="btn_excluir_disc"):
+            if not confirmado:
+                st.error("Marque a caixa de confirmação para excluir.")
+            else:
+                try:
+                    nome = dc.excluir(id_excluir)
+                    avisar("success", f"Disciplina '{nome}' excluída.")
+                    st.rerun()
+                except ValueError as e:
+                    st.error(str(e))
+                except FirestoreError as e:
+                    st.error(f"Falha ao excluir no Firestore: {e}")

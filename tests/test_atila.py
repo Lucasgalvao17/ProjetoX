@@ -406,5 +406,78 @@ class TestDisciplinas(Base):
         self.assertEqual(len(dc.listar()), n)
 
 
+class TestExcluirDisciplina(Base):
+    ONTEM = str(tempo.hoje() - timedelta(days=1))
+
+    def _id(self, codigo):
+        return dc.listar().set_index("codigo").loc[codigo, "id"]
+
+    def test_exclui_e_devolve_o_nome(self):
+        did = self._id("BD201")
+        self.assertEqual(dc.excluir(did), "Banco de Dados")
+        self.assertIsNone(fs.obter("disciplinas", did))
+        self.assertNotIn("BD201", dc.listar()["codigo"].tolist())
+
+    def test_inexistente(self):
+        dc.listar()
+        with self.assertRaises(ValueError):
+            dc.excluir("nao-existe")
+
+    def test_bloqueia_com_reserva_pendente_ou_confirmada_por_vir(self):
+        did = self._id("WEB101")
+        rid = ag.criar({**reserva(), "disciplina_id": did})
+        with self.assertRaises(ValueError) as e:
+            dc.excluir(did)
+        self.assertIn("1 reserva(s)", str(e.exception))
+        ag.alterar_status(rid, "Confirmada")
+        with self.assertRaises(ValueError):
+            dc.excluir(did)
+        self.assertIsNotNone(fs.obter("disciplinas", did))
+
+    def test_libera_quando_a_reserva_foi_cancelada_ou_reprovada_ou_ja_passou(self):
+        did = self._id("WEB101")
+        a = ag.criar({**reserva(), "disciplina_id": did}); ag.alterar_status(a, "Cancelada")
+        b = ag.criar({**reserva(ini="08:00", fim="09:00"), "disciplina_id": did}); ag.alterar_status(b, "Reprovada")
+        c = ag.criar({**reserva(data=self.ONTEM), "disciplina_id": did}); ag.alterar_status(c, "Confirmada")
+        d = ag.criar({**reserva(ini="10:00", fim="11:00", data=self.ONTEM), "disciplina_id": did})   # pendente vencida
+        dc.excluir(did)
+        self.assertIsNone(fs.obter("disciplinas", did))
+        self.assertEqual(len(ag.listar()), 4)                                     # o histórico não é tocado
+        self.assertTrue((ag.listar()["disciplina_id"] == did).all())
+
+    def test_reserva_antiga_sem_disciplina_id_casa_pelo_nome(self):
+        dc.listar()
+        fs.criar("reservas", {**reserva(), "disciplina": "Banco  de DADOS"})      # sem disciplina_id
+        with self.assertRaises(ValueError):
+            dc.excluir(self._id("BD201"))
+        dc.excluir(self._id("ES301"))                                             # outra disciplina não é afetada
+
+    def test_reserva_de_outra_disciplina_nao_bloqueia(self):
+        ag.criar({**reserva(), "disciplina_id": self._id("WEB101")})
+        dc.excluir(self._id("BD201"))
+
+    def test_excluir_todas_nao_faz_o_seed_repovoar(self):
+        for _, r in dc.listar().iterrows():
+            dc.excluir(r["id"])
+        self.assertEqual(len(dc.listar()), 0)
+        self.assertEqual(len(dc.listar()), 0)                                     # e continua vazia nas leituras seguintes
+
+    def test_excluir_uma_base_antiga_sem_marcador_tambem_nao_repovoa(self):
+        fs.criar("disciplinas", {"nome": "Única", "codigo": "UNI1", "curso": "X", "ativa": "Sim"}, doc_id=dc.id_por_codigo("UNI1"))
+        dc.excluir(dc.id_por_codigo("UNI1"))                                      # base já existia, sem marcador de seed
+        self.assertEqual(len(dc.listar()), 0)
+
+    def test_pode_recadastrar_o_mesmo_codigo_depois_de_excluir(self):
+        did = self._id("BD201")
+        dc.excluir(did)
+        self.assertEqual(dc.cadastrar("Banco de Dados", "BD201", "SI"), did)
+
+    def test_nova_reserva_com_disciplina_excluida_e_recusada(self):
+        did = self._id("BD201")
+        dc.excluir(did)
+        with self.assertRaises(ValueError):
+            ag.criar({**reserva(), "disciplina_id": did})
+
+
 if __name__ == "__main__":
     unittest.main()

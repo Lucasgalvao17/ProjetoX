@@ -49,6 +49,12 @@ def _fim_datetime(data, fim):
         return None
 
 
+def ja_passou(data, fim, agora: datetime | None = None) -> bool:
+    """True se a reserva já terminou. Data/hora ilegível conta como 'não passou' (decisão conservadora)."""
+    termino = _fim_datetime(data, fim)
+    return termino is not None and termino < (agora or tempo.agora())
+
+
 # ---------------------------------------------------------------- classificação
 def classificar(df: pd.DataFrame, agora: datetime | None = None) -> pd.DataFrame:
     """Acrescenta `situacao` (rótulo amigável) e `aba` (qual das 4 tabelas). Nada é gravado:

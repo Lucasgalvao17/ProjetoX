@@ -237,9 +237,17 @@ class TestSalasEdicao(Base):
         sid = sc.cadastrar(sala("Sala 101")); ag.criar(reserva())
         _, saida, _ = rodar("pages/1_Salas.py", {"Nome da sala": "sala 101", "Cadastrar sala": True})
         self.assertTrue(contem(saida, "Já existe uma sala"))
-        _, saida, _ = rodar("pages/1_Salas.py", {"Excluir sala": True, "Sala para excluir": sid})
+        _, saida, _ = rodar("pages/1_Salas.py", {"Excluir sala": True, "Sala para excluir": sid, f"sala_del_ok_{sid}": True})
         self.assertTrue(contem(saida, "reserva(s) pendente(s)/confirmada(s)"), saida)
         self.assertEqual(len(sc.listar()), 1)
+
+    def test_excluir_sala_exige_confirmacao(self):
+        sid = sc.cadastrar(sala("Sala Vazia"))
+        _, saida, _ = rodar("pages/1_Salas.py", {"Excluir sala": True, "Sala para excluir": sid})
+        self.assertTrue(contem(saida, "Marque a caixa de confirmação"), saida)
+        self.assertEqual(len(sc.listar()), 1)
+        rodar("pages/1_Salas.py", {"Excluir sala": True, "Sala para excluir": sid, f"sala_del_ok_{sid}": True})
+        self.assertEqual(len(sc.listar()), 0)
 
 
 def dash_orfas():
@@ -586,6 +594,83 @@ class TestDisciplinasPagina(Base):
         with mock.patch.object(dc, "_duplicada", return_value=None):              # ignora a checagem em lista
             with self.assertRaises(ValueError):
                 dc.cadastrar("Outro nome", "nov1", "X")                           # o ID determinístico barra
+
+
+class TestExcluirDisciplinaPagina(Base):
+    def test_sem_confirmacao_nao_exclui(self):
+        did = disc("BD201")
+        _, saida, _ = rodar("pages/5_Disciplinas.py", {"disc_del_sel": did, "btn_excluir_disc": True})
+        self.assertTrue(contem(saida, "Marque a caixa de confirmação"), saida)
+        self.assertIsNotNone(fs.obter("disciplinas", did))
+
+    def test_confirmando_exclui_e_avisa(self):
+        did = disc("BD201")
+        d, _, _ = rodar("pages/5_Disciplinas.py", {"disc_del_sel": did, f"disc_del_ok_{did}": True, "btn_excluir_disc": True})
+        self.assertEqual(d, "stop/rerun")
+        self.assertIsNone(fs.obter("disciplinas", did))
+        self.assertTrue(any("Banco de Dados" in a and "excluída" in a for a in avisos()), avisos())
+        self.assertEqual(len(dc.listar()), 2)
+
+    def test_disciplina_com_reserva_por_vir_e_bloqueada_na_tela(self):
+        did = disc("WEB101")
+        ag.criar({**reserva(), "disciplina_id": did})
+        _, saida, _ = rodar("pages/5_Disciplinas.py", {"disc_del_sel": did, f"disc_del_ok_{did}": True, "btn_excluir_disc": True})
+        self.assertTrue(contem(saida, "ainda por vir"), saida)
+        self.assertIsNotNone(fs.obter("disciplinas", did))
+
+    def test_lista_nao_mostra_o_id_tecnico(self):
+        _, _, t = rodar("pages/5_Disciplinas.py")
+        self.assertNotIn("id", t[0].columns)
+        self.assertEqual(list(t[0].columns), ["Nome", "Código", "Curso", "Ativa"])
+
+    def test_professor_nao_acessa_a_exclusao(self):
+        did = disc("BD201")
+        rodar("pages/5_Disciplinas.py", {"disc_del_sel": did, f"disc_del_ok_{did}": True, "btn_excluir_disc": True}, usuario=PROF)
+        self.assertIsNotNone(fs.obter("disciplinas", did))
+
+
+class TestDashboardSomenteAulasFuturas(Base):
+    ONTEM = str(tempo.hoje() - timedelta(days=1))
+    HOJE = str(tempo.hoje())
+
+    def _cria(self, prof, data, ini="08:00", fim="09:00", status="Confirmada"):
+        rid = ag.criar(reserva(ini=ini, fim=fim, data=data, prof=prof))
+        if status != "Pendente":
+            ag.alterar_status(rid, status)
+        return rid
+
+    def test_dia_que_passou_sai_de_recentes_mas_continua_no_banco(self):
+        sc.cadastrar(sala("Sala 101"))
+        self._cria("Passada", self.ONTEM)
+        self._cria("Futura", AMANHA)
+        _, saida, tabelas = rodar("app.py")
+        self.assertEqual(tabelas[1]["professor"].tolist(), ["Futura"])
+        self.assertTrue(contem(saida, "Reservas=2"))                              # segue no banco e nas métricas
+        self.assertEqual(len(ag.listar()), 2)
+        hist = ag.classificar(ag.listar())
+        self.assertIn("Histórico", hist[hist["professor"] == "Passada"]["aba"].tolist())
+
+    def test_aula_de_hoje_continua_ate_o_dia_acabar(self):
+        sc.cadastrar(sala("Sala 101"))
+        self._cria("Hoje cedo", self.HOJE, "00:00", "00:30")                      # já terminou, mas o DIA não
+        _, _, tabelas = rodar("app.py")
+        self.assertEqual(tabelas[1]["professor"].tolist(), ["Hoje cedo"])
+
+    def test_so_aulas_passadas_mostra_mensagem_propria(self):
+        sc.cadastrar(sala("Sala 101"))
+        self._cria("Passada", self.ONTEM)
+        _, saida, _ = rodar("app.py")
+        self.assertTrue(contem(saida, "Nenhum agendamento de hoje em diante"), saida)
+        self.assertFalse(contem(saida, "Nenhum agendamento cadastrado"))
+
+    def test_aviso_de_pendentes_conta_so_as_por_vir(self):
+        sc.cadastrar(sala("Sala 101"))
+        self._cria("Vencida", self.ONTEM, status="Pendente")
+        _, saida, _ = rodar("app.py")
+        self.assertFalse(contem(saida, "aguardando sua análise"), saida)
+        self._cria("Nova", AMANHA, status="Pendente")
+        _, saida, _ = rodar("app.py")
+        self.assertTrue(contem(saida, "1 solicitação(ões) de reserva aguardando sua análise"), saida)
 
 
 if __name__ == "__main__":
