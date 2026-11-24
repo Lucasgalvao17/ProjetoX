@@ -221,29 +221,38 @@ button[data-baseweb="tab"][aria-selected="true"] { color: var(--titulo); }
   background: var(--superficie);
 }
 
-/* Avisos: o Streamlit pinta o fundo com o tema claro nativo (config.toml), então no modo escuro ficava
-   fundo claro + texto claro. Aqui fundo, borda e texto vêm sempre do mesmo par de variáveis. */
+/* Avisos: o Streamlit pinta o fundo claro em um elemento INTERNO do aviso (varia com a versão). Por isso o
+   fundo/borda ficam no [data-testid="stAlert"] e todo descendente fica transparente, com texto na cor do par. */
 .stApp [data-testid="stAlert"] {
   --a-fundo: var(--info-fundo); --a-borda: var(--info-borda); --a-texto: var(--info-texto);
   background: var(--a-fundo) !important;
+  background-color: var(--a-fundo) !important;
   border: 1px solid var(--a-borda) !important;
-  border-left-width: 5px !important;
-  border-radius: 10px;
+  border-left: 5px solid var(--a-borda) !important;
+  border-radius: 10px !important;
+  overflow: hidden;
 }
-.stApp [data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"]) {
+.stApp [data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"]),
+.stApp [data-testid="stAlert"]:has([data-baseweb="notification"][kind="positive"]) {
   --a-fundo: var(--ok-fundo); --a-borda: var(--ok-borda); --a-texto: var(--ok-texto);
 }
-.stApp [data-testid="stAlert"]:has([data-testid="stAlertContentWarning"]) {
+.stApp [data-testid="stAlert"]:has([data-testid="stAlertContentWarning"]),
+.stApp [data-testid="stAlert"]:has([data-baseweb="notification"][kind="warning"]) {
   --a-fundo: var(--aviso-fundo); --a-borda: var(--aviso-borda); --a-texto: var(--aviso-texto);
 }
-.stApp [data-testid="stAlert"]:has([data-testid="stAlertContentError"]) {
+.stApp [data-testid="stAlert"]:has([data-testid="stAlertContentError"]),
+.stApp [data-testid="stAlert"]:has([data-baseweb="notification"][kind="negative"]) {
   --a-fundo: var(--erro-fundo); --a-borda: var(--erro-borda); --a-texto: var(--erro-texto);
 }
-.stApp [data-testid="stAlert"] [data-baseweb="notification"] {
+.stApp [data-testid="stAlert"] * {
   background: transparent !important;
-  border: 0 !important;
+  background-color: transparent !important;
+  border-color: transparent !important;
+  color: var(--a-texto) !important;
+  -webkit-text-fill-color: var(--a-texto) !important;
 }
-.stApp [data-testid="stAlert"], .stApp [data-testid="stAlert"] * { color: var(--a-texto) !important; }
+.stApp [data-testid="stAlert"] svg { fill: var(--a-texto) !important; color: var(--a-texto) !important; }
+.stApp [data-testid="stAlert"] a { text-decoration: underline; }
 [data-testid="stVerticalBlockBorderWrapper"] { border-radius: 14px; background: var(--superficie); }
 
 /* Atalhos da tela inicial do professor (links de página fora do menu) */
@@ -398,13 +407,21 @@ CSS_LOGIN = """
 }
 .block-container, [data-testid="stMainBlockContainer"] { max-width: 1080px; padding-top: 4rem; }
 
-/* Cartão do formulário (E-mail ... Entrar): borda visível, fundo próprio e sombra suave. */
-[data-testid="stMain"] [data-testid="stVerticalBlockBorderWrapper"] {
+/* Cartão do formulário (E-mail ... Entrar). Estiliza o bloco da coluna que contém as abas, o que funciona em
+   qualquer versão do Streamlit; a moldura nativa do st.container(border=True) é neutralizada para não duplicar. */
+[data-testid="stMain"] [data-testid="stColumn"]:has([data-baseweb="tab-list"]) > *:first-child,
+[data-testid="stMain"] [data-testid="column"]:has([data-baseweb="tab-list"]) > *:first-child {
   background: var(--superficie) !important;
-  border: 1px solid var(--borda-forte) !important;
-  border-radius: 16px;
-  padding: 1.25rem 1.5rem 1.5rem;
-  box-shadow: 0 4px 18px var(--sombra);
+  border: 2px solid var(--borda-forte) !important;
+  border-radius: 16px !important;
+  padding: 1.5rem 1.75rem 1.75rem !important;
+  box-shadow: 0 6px 22px var(--sombra);
+}
+[data-testid="stMain"] [data-testid="stVerticalBlockBorderWrapper"] {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
 }
 
 .atila-hero {
